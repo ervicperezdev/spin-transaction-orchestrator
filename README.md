@@ -45,6 +45,17 @@ The local defaults are intentionally non-secret development values. Override the
 | `DB_USERNAME` | `transactions_app` |
 | `DB_PASSWORD` | `transactions_app` |
 | `SERVER_PORT` | `8080` |
+| `PAYMENT_PROVIDER_BASE_URL` | `http://localhost:9090` |
+| `PAYMENT_PROVIDER_CONNECT_TIMEOUT` | `2s` |
+| `PAYMENT_PROVIDER_READ_TIMEOUT` | `3s` |
+
+## Payment provider contract
+
+The outbound adapter sends `POST /payments` with `transactionId`, `type`, `amount`, and
+`currency`. It expects an `APPROVED` response containing `reference`, or a `REJECTED`
+response containing `rejectionReason`. HTTP 4xx/5xx responses, malformed responses, and
+network failures are translated to `PaymentProviderUnavailableException`; they never leak
+HTTP client types into the domain or application port.
 
 Copy `.env.example` only for local convenience; `.env` is ignored and must never contain production credentials.
 
