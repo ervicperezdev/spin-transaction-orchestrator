@@ -12,9 +12,11 @@ import com.spin.transactionorchestrator.domain.model.Transaction;
 import com.spin.transactionorchestrator.domain.model.TransactionType;
 import com.spin.transactionorchestrator.domain.model.TransactionValidationError;
 import com.spin.transactionorchestrator.domain.model.TransactionValidationException;
+import com.spin.transactionorchestrator.domain.model.TransactionStateException;
 import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.Currency;
+import java.util.NoSuchElementException;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
@@ -47,8 +49,27 @@ class TransactionControllerTest {
     @Test void exposesStableBusinessValidationCodeWithoutExceptionDetails() throws Exception {
         when(executeTransaction.execute(org.mockito.ArgumentMatchers.any())).thenThrow(new TransactionValidationException(TransactionValidationError.DEBIT_AMOUNT_LIMIT_EXCEEDED, "internal business detail"));
         mockMvc.perform(post("/transactions").contentType(MediaType.APPLICATION_JSON).content("{\"type\":\"DEBIT\",\"amount\":10000.01,\"currency\":\"MXN\"}"))
-                .andExpect(status().isBadRequest()).andExpect(jsonPath("$.code").value("DEBIT_AMOUNT_LIMIT_EXCEEDED"))
-                .andExpect(jsonPath("$.message").value("Transaction request violates business rules"))
+                .andExpect(status().isUnprocessableEntity()).andExpect(jsonPath("$.code").value("DEBIT_AMOUNT_LIMIT_EXCEEDED"))
+                .andExpect(jsonPath("$.message").value("Transaction validation failed"))
                 .andExpect(jsonPath("$.message").value(org.hamcrest.Matchers.not(org.hamcrest.Matchers.containsString("internal business detail"))));
+    }
+    @Test void mapsBusinessRuleFailureToSafeConflictResponse() throws Exception {
+        when(executeTransaction.execute(org.mockito.ArgumentMatchers.any())).thenThrow(new TransactionStateException("transaction-id=secret"));
+        mockMvc.perform(post("/transactions").contentType(MediaType.APPLICATION_JSON).content("{\"type\":\"DEBIT\",\"amount\":25.50,\"currency\":\"MXN\"}"))
+                .andExpect(status().isConflict()).andExpect(jsonPath("$.code").value("BUSINESS_RULE_VIOLATION"))
+                .andExpect(jsonPath("$.message").value("The transaction cannot be processed in its current state"));
+    }
+    @Test void mapsMissingResourceToSafeNotFoundResponse() throws Exception {
+        when(executeTransaction.execute(org.mockito.ArgumentMatchers.any())).thenThrow(new NoSuchElementException("transaction-id=secret"));
+        mockMvc.perform(post("/transactions").contentType(MediaType.APPLICATION_JSON).content("{\"type\":\"DEBIT\",\"amount\":25.50,\"currency\":\"MXN\"}"))
+                .andExpect(status().isNotFound()).andExpect(jsonPath("$.code").value("RESOURCE_NOT_FOUND"))
+                .andExpect(jsonPath("$.message").value("The requested resource was not found"));
+    }
+    @Test void hidesUnexpectedFailureDetails() throws Exception {
+        when(executeTransaction.execute(org.mockito.ArgumentMatchers.any())).thenThrow(new IllegalStateException("provider payload=secret"));
+        mockMvc.perform(post("/transactions").contentType(MediaType.APPLICATION_JSON).content("{\"type\":\"DEBIT\",\"amount\":25.50,\"currency\":\"MXN\"}"))
+                .andExpect(status().isInternalServerError()).andExpect(jsonPath("$.code").value("INTERNAL_ERROR"))
+                .andExpect(jsonPath("$.message").value("An unexpected error occurred"))
+                .andExpect(jsonPath("$.message").value(org.hamcrest.Matchers.not(org.hamcrest.Matchers.containsString("secret"))));
     }
 }
