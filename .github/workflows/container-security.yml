@@ -14,7 +14,7 @@ jobs:
     name: Lint Dockerfile
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - name: Run Hadolint policy
         run: docker run --rm -i hadolint/hadolint:v2.12.0 < Dockerfile
 
@@ -22,7 +22,7 @@ jobs:
     name: Scan container image
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - name: Build image for scanning
         run: docker build --tag spin-transaction-orchestrator:${{ github.sha }} .
       - name: Export image without registry credentials

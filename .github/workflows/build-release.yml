@@ -35,7 +35,7 @@ jobs:
       ecr-image: ${{ steps.ecr-login.outputs.registry }}/${{ env.IMAGE_NAME }}
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       # Java build ─────────────────────────────────────────────────────────
       - name: Set up Java 21 (Temurin)
@@ -127,7 +127,7 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       # AWS auth via OIDC – same pattern, separate deploy role if needed ─────
       - name: Configure AWS credentials (OIDC)
