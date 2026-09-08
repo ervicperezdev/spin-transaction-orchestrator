@@ -12,6 +12,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.http.converter.HttpMessageNotReadableException;
 import org.springframework.validation.FieldError;
 import org.springframework.web.bind.MethodArgumentNotValidException;
+import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 
@@ -27,6 +28,10 @@ class RestExceptionHandler {
     @ExceptionHandler({HttpMessageNotReadableException.class, InvalidTransactionRequestException.class})
     ResponseEntity<ApiErrorResponse> handleMalformedRequest(RuntimeException exception) {
         return badRequest("INVALID_REQUEST", "Request body is invalid", List.of());
+    }
+    @ExceptionHandler({MethodArgumentTypeMismatchException.class, jakarta.validation.ConstraintViolationException.class})
+    ResponseEntity<ApiErrorResponse> handleInvalidQueryParameter(RuntimeException exception) {
+        return badRequest("INVALID_QUERY_PARAMETER", "Query parameters are invalid", List.of());
     }
     @ExceptionHandler(TransactionValidationException.class)
     ResponseEntity<ApiErrorResponse> handleTransactionValidation(TransactionValidationException exception) {

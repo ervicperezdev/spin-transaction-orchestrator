@@ -47,7 +47,7 @@ class PostgresTransactionRepositoryIntegrationTest {
         transaction.approve("provider-123");
 
         Transaction persisted = repository.save(transaction);
-        Transaction rehydrated = repository.findAll().getFirst();
+        Transaction rehydrated = repository.find(new com.spin.transactionorchestrator.application.port.in.FindTransactionsQuery(0, 20, null, null)).items().getFirst();
 
         assertThat(rehydrated.id()).isEqualTo(persisted.id());
         assertThat(rehydrated.amount()).isEqualByComparingTo("9999.99");
@@ -65,7 +65,7 @@ class PostgresTransactionRepositoryIntegrationTest {
         transaction.reject("Insufficient balance");
 
         repository.save(transaction);
-        Transaction rehydrated = repository.findAll().getFirst();
+        Transaction rehydrated = repository.find(new com.spin.transactionorchestrator.application.port.in.FindTransactionsQuery(0, 20, null, null)).items().getFirst();
 
         assertThat(rehydrated.amount()).isEqualByComparingTo("25.50");
         assertThat(rehydrated.currency()).isEqualTo(mxn());
