@@ -1,0 +1,12 @@
+apiVersion: v2
+name: transaction-api
+description: Spring Boot fintech transaction orchestrator API
+type: application
+version: 0.1.0
+appVersion: "0.0.1-SNAPSHOT"
+keywords:
+  - fintech
+  - transactions
+  - spring-boot
+maintainers:
+  - name: spin-team

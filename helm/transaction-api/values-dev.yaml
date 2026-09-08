@@ -1,0 +1,29 @@
+replicaCount: 1
+
+autoscaling:
+  minReplicas: 1
+  maxReplicas: 3
+
+resources:
+  requests:
+    cpu: 100m
+    memory: 256Mi
+  limits:
+    cpu: 250m
+    memory: 512Mi
+
+config:
+  dbUrl: "jdbc:postgresql://REPLACE_WITH_DEV_RDS_ENDPOINT:5432/transactions_dev"
+  paymentProviderBaseUrl: "https://sandbox.REPLACE_WITH_PROVIDER_URL"
+  serverPort: "8080"
+
+externalSecret:
+  remoteRef:
+    key: spin/transaction-api/dev
+
+ingress:
+  hosts:
+    - host: "transaction-api.dev.example.com"
+      paths:
+        - path: /
+          pathType: Prefix
