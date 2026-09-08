@@ -5,6 +5,7 @@ import com.spin.transactionorchestrator.application.port.in.TransactionPage;
 import com.spin.transactionorchestrator.application.port.out.TransactionRepository;
 import com.spin.transactionorchestrator.domain.model.Transaction;
 import java.util.Objects;
+import java.util.Optional;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Sort;
 import org.springframework.data.jpa.domain.Specification;
@@ -24,6 +25,12 @@ public class PostgresTransactionRepository implements TransactionRepository {
     public Transaction save(Transaction transaction) {
         Objects.requireNonNull(transaction, "transaction must not be null");
         return mapper.toDomain(repository.save(mapper.toEntity(transaction)));
+    }
+
+    @Override
+    public Optional<Transaction> findByIdempotencyKey(String key) {
+        Objects.requireNonNull(key, "key must not be null");
+        return repository.findByIdempotencyKey(key).map(mapper::toDomain);
     }
 
     @Override

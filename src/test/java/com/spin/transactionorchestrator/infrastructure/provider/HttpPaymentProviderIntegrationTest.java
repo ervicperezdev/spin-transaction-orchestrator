@@ -32,7 +32,7 @@ class HttpPaymentProviderIntegrationTest {
     void startProvider() {
         provider = new WireMockServer();
         provider.start();
-        transaction = Transaction.pending(TransactionType.DEBIT, new BigDecimal("25.50"), Currency.getInstance("MXN"), Instant.EPOCH);
+        transaction = Transaction.pending(TransactionType.DEBIT, new BigDecimal("25.50"), Currency.getInstance("MXN"), Instant.EPOCH, null);
         SimpleClientHttpRequestFactory requestFactory = new SimpleClientHttpRequestFactory();
         requestFactory.setReadTimeout(Duration.ofMillis(100));
         adapter = new HttpPaymentProvider(RestClient.builder().baseUrl(provider.baseUrl()).requestFactory(requestFactory).build(), Duration.ofMillis(100));

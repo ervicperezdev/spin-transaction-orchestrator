@@ -10,6 +10,7 @@ import com.spin.transactionorchestrator.domain.model.Transaction;
 import com.spin.transactionorchestrator.domain.model.TransactionRules;
 import java.time.Clock;
 import java.util.Objects;
+import java.util.Optional;
 
 public class TransactionExecutionService implements ExecuteTransaction {
     private final TransactionRepository repository;
@@ -25,8 +26,15 @@ public class TransactionExecutionService implements ExecuteTransaction {
     @Override
     public Transaction execute(ExecuteTransactionCommand command) {
         Objects.requireNonNull(command, "command must not be null");
+        if (command.idempotencyKey() != null) {
+            Optional<Transaction> existing = repository.findByIdempotencyKey(command.idempotencyKey());
+            if (existing.isPresent()) {
+                return existing.get();
+            }
+        }
         TransactionRules.validate(command.type(), command.amount(), command.currency());
-        Transaction transaction = Transaction.pending(command.type(), command.amount(), command.currency(), clock.instant());
+        Transaction transaction = Transaction.pending(command.type(), command.amount(), command.currency(), clock.instant(),
+                command.idempotencyKey());
         PaymentProviderResult result = paymentProvider.execute(transaction);
 
         if (result.status() == PaymentProviderStatus.APPROVED) {

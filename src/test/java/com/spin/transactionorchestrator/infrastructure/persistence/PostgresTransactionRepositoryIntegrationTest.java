@@ -43,7 +43,7 @@ class PostgresTransactionRepositoryIntegrationTest {
     @Test
     void preservesApprovedTransactionAcrossPostgresRoundTrip() {
         Instant createdAt = Instant.parse("2026-09-08T04:05:06.123456Z");
-        Transaction transaction = Transaction.pending(TransactionType.DEBIT, new BigDecimal("9999.99"), mxn(), createdAt);
+        Transaction transaction = Transaction.pending(TransactionType.DEBIT, new BigDecimal("9999.99"), mxn(), createdAt, null);
         transaction.approve("provider-123");
 
         Transaction persisted = repository.save(transaction);
@@ -61,7 +61,7 @@ class PostgresTransactionRepositoryIntegrationTest {
     @Test
     void preservesRejectedTransactionAcrossPostgresRoundTrip() {
         Instant createdAt = Instant.parse("2026-09-08T04:05:07Z");
-        Transaction transaction = Transaction.pending(TransactionType.CREDIT, new BigDecimal("25.50"), mxn(), createdAt);
+        Transaction transaction = Transaction.pending(TransactionType.CREDIT, new BigDecimal("25.50"), mxn(), createdAt, null);
         transaction.reject("Insufficient balance");
 
         repository.save(transaction);

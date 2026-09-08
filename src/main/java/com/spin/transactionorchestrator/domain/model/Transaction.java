@@ -15,18 +15,22 @@ public final class Transaction {
     private TransactionStatus status;
     private String providerReference;
     private String rejectionReason;
+    private final String idempotencyKey;
 
-    private Transaction(UUID id, TransactionType type, BigDecimal amount, Currency currency, Instant createdAt) {
+    private Transaction(UUID id, TransactionType type, BigDecimal amount, Currency currency, Instant createdAt,
+            String idempotencyKey) {
         this.id = Objects.requireNonNull(id, "id must not be null");
         this.type = Objects.requireNonNull(type, "type must not be null");
         this.amount = Objects.requireNonNull(amount, "amount must not be null");
         this.currency = Objects.requireNonNull(currency, "currency must not be null");
         this.createdAt = Objects.requireNonNull(createdAt, "createdAt must not be null");
         this.status = TransactionStatus.PENDING;
+        this.idempotencyKey = idempotencyKey;
     }
 
-    public static Transaction pending(TransactionType type, BigDecimal amount, Currency currency, Instant createdAt) {
-        return new Transaction(UUID.randomUUID(), type, amount, currency, createdAt);
+    public static Transaction pending(TransactionType type, BigDecimal amount, Currency currency, Instant createdAt,
+            String idempotencyKey) {
+        return new Transaction(UUID.randomUUID(), type, amount, currency, createdAt, idempotencyKey);
     }
 
     /**
@@ -35,8 +39,9 @@ public final class Transaction {
      * create a domain object that could not have been reached through its behavior.
      */
     public static Transaction rehydrate(UUID id, TransactionType type, BigDecimal amount, Currency currency,
-            Instant createdAt, TransactionStatus status, String providerReference, String rejectionReason) {
-        Transaction transaction = new Transaction(id, type, amount, currency, createdAt);
+            Instant createdAt, TransactionStatus status, String providerReference, String rejectionReason,
+            String idempotencyKey) {
+        Transaction transaction = new Transaction(id, type, amount, currency, createdAt, idempotencyKey);
         transaction.status = Objects.requireNonNull(status, "status must not be null");
 
         switch (status) {
@@ -96,4 +101,5 @@ public final class Transaction {
     public TransactionStatus status() { return status; }
     public String providerReference() { return providerReference; }
     public String rejectionReason() { return rejectionReason; }
+    public String idempotencyKey() { return idempotencyKey; }
 }

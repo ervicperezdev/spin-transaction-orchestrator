@@ -36,7 +36,7 @@ class TransactionControllerTest {
     @MockBean private FindTransactions findTransactions;
 
     @Test void returnsDefaultBoundedPageThroughFindTransactionsUseCase() throws Exception {
-        Transaction transaction = Transaction.pending(TransactionType.DEBIT, new BigDecimal("25.50"), Currency.getInstance("MXN"), Instant.parse("2026-09-08T00:00:00Z"));
+        Transaction transaction = Transaction.pending(TransactionType.DEBIT, new BigDecimal("25.50"), Currency.getInstance("MXN"), Instant.parse("2026-09-08T00:00:00Z"), null);
         when(findTransactions.find(new FindTransactionsQuery(0, 20, null, null)))
                 .thenReturn(new TransactionPage(java.util.List.of(transaction), 0, 20, 1, 1));
 
@@ -68,7 +68,7 @@ class TransactionControllerTest {
         verify(findTransactions, times(0)).find(org.mockito.ArgumentMatchers.any());
     }
     @Test void createsTransactionAndInvokesUseCaseOnce() throws Exception {
-        Transaction transaction = Transaction.pending(TransactionType.DEBIT, new BigDecimal("25.50"), Currency.getInstance("MXN"), Instant.parse("2026-09-08T00:00:00Z"));
+        Transaction transaction = Transaction.pending(TransactionType.DEBIT, new BigDecimal("25.50"), Currency.getInstance("MXN"), Instant.parse("2026-09-08T00:00:00Z"), null);
         transaction.approve("provider-reference-not-exposed");
         when(executeTransaction.execute(argThat(command -> command.type() == TransactionType.DEBIT && command.amount().compareTo(new BigDecimal("25.50")) == 0 && command.currency().equals(Currency.getInstance("MXN"))))).thenReturn(transaction);
         mockMvc.perform(post("/transactions").contentType(MediaType.APPLICATION_JSON).content("{\"type\":\"DEBIT\",\"amount\":25.50,\"currency\":\"MXN\"}"))
