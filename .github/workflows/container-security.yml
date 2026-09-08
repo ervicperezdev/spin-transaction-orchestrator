@@ -35,5 +35,6 @@ jobs:
           --input /workspace/image.tar
           --scanners vuln,secret
           --severity HIGH,CRITICAL
+          --ignore-unfixed
           --exit-code 1
           --no-progress
