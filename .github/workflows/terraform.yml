@@ -11,11 +11,11 @@ name: Terraform
 on:
   pull_request:
     paths:
-      - 'terraform/**'
+      - "terraform/**"
   push:
     branches: [main]
     paths:
-      - 'terraform/**'
+      - "terraform/**"
 
 permissions:
   contents: read
@@ -32,17 +32,17 @@ jobs:
     permissions:
       contents: read
       id-token: write
-      pull-requests: write   # needed to post plan comment on the PR
+      pull-requests: write # needed to post plan comment on the PR
 
     env:
-      TF_DIR: terraform/     # adjust if your root module lives in a subdir
+      TF_DIR: terraform/ # adjust if your root module lives in a subdir
 
     steps:
       - uses: actions/checkout@v7
 
       # AWS auth via OIDC ─────────────────────────────────────────────────
       - name: Configure AWS credentials (OIDC)
-        uses: aws-actions/configure-aws-credentials@v4
+        uses: aws-actions/configure-aws-credentials@v6
         with:
           role-to-assume: ${{ secrets.AWS_TERRAFORM_ROLE_ARN }}
           aws-region: ${{ vars.AWS_REGION }}
@@ -51,7 +51,7 @@ jobs:
       - name: Set up Terraform
         uses: hashicorp/setup-terraform@v3
         with:
-          terraform_wrapper: true   # wraps terraform output for step outputs
+          terraform_wrapper: true # wraps terraform output for step outputs
 
       # Format check – fails if any .tf file is not canonical ────────────
       - name: Terraform fmt (check)
@@ -108,7 +108,7 @@ jobs:
         with:
           name: tfplan-${{ github.run_id }}
           path: ${{ env.TF_DIR }}/tfplan
-          retention-days: 1   # plan is only valid for this workflow run
+          retention-days: 1 # plan is only valid for this workflow run
 
   # ── TERRAFORM APPLY (runs on merge to main) ───────────────────────────────
   # The `environment: production` block enforces a required-reviewer gate:
@@ -117,7 +117,7 @@ jobs:
     name: Terraform Apply
     runs-on: ubuntu-latest
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-    environment: production   # required-reviewers gate in GitHub Environments
+    environment: production # required-reviewers gate in GitHub Environments
 
     env:
       TF_DIR: terraform/
@@ -127,7 +127,7 @@ jobs:
 
       # AWS auth via OIDC ─────────────────────────────────────────────────
       - name: Configure AWS credentials (OIDC)
-        uses: aws-actions/configure-aws-credentials@v4
+        uses: aws-actions/configure-aws-credentials@v6
         with:
           role-to-assume: ${{ secrets.AWS_TERRAFORM_ROLE_ARN }}
           aws-region: ${{ vars.AWS_REGION }}
@@ -150,7 +150,7 @@ jobs:
         with:
           name: tfplan-${{ github.run_id }}
           path: ${{ env.TF_DIR }}
-        continue-on-error: true   # apply from scratch if plan artifact expired
+        continue-on-error: true # apply from scratch if plan artifact expired
 
       # Apply ─────────────────────────────────────────────────────────────
       - name: Terraform apply
