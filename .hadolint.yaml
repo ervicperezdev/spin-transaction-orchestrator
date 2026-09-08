@@ -1,0 +1,3 @@
+# Fail only on Hadolint errors. There are intentionally no ignored rules: any
+# future exception must be explicit here and justified in this file and the PR.
+failure-threshold: error
