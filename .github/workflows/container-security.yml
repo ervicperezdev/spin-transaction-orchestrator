@@ -38,3 +38,16 @@ jobs:
           --ignore-unfixed
           --exit-code 1
           --no-progress
+      - name: Generate SBOM
+        run: >-
+          docker run --rm
+          --volume "$GITHUB_WORKSPACE:/workspace"
+          anchore/syft:v1.18.1
+          docker-archive:/workspace/image.tar
+          -o spdx-json=/workspace/sbom.spdx.json
+      - name: Upload SBOM artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: sbom-${{ github.sha }}
+          path: sbom.spdx.json
+          retention-days: 30

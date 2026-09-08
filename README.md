@@ -165,3 +165,51 @@ triage, capture its package, installed/fixed versions, reachability, owner and
 remediation date in the PR or issue; keep the failing gate until an approved
 exception is documented and time-bounded. Never pass secrets as Docker build
 arguments or commit them into the image.
+
+The `Container security` workflow also generates an SBOM (Software Bill of
+Materials) in SPDX-JSON format from the same image tarball using Syft and
+uploads it as a workflow artifact (`sbom-<sha>`). Run locally with:
+
+```bash
+docker build --tag spin-transaction-orchestrator:security .
+docker save --output image.tar spin-transaction-orchestrator:security
+docker run --rm \
+  --volume "$PWD:/workspace" \
+  anchore/syft:v1.18.1 \
+  docker-archive:/workspace/image.tar \
+  -o spdx-json=/workspace/sbom.spdx.json
+rm image.tar
+```
+
+## Image signing and SBOM attestation (release)
+
+The `Release` GitHub Actions workflow triggers on version tags (`v*`). It
+builds and pushes to `ghcr.io`, then signs the image and attests the SBOM
+using Cosign with a keyless ephemeral OIDC identity issued by GitHub Actions.
+No private keys or tokens are stored in the repository or in the image.
+
+Verify a released image signature (requires `cosign` installed):
+
+```bash
+cosign verify \
+  --certificate-identity-regexp \
+    "https://github.com/ervicperezdev/spin-transaction-orchestrator/.github/workflows/release.yml" \
+  --certificate-oidc-issuer "https://token.actions.githubusercontent.com" \
+  ghcr.io/ervicperezdev/spin-transaction-orchestrator:<tag>
+```
+
+Verify and extract the SBOM attestation:
+
+```bash
+cosign verify-attestation \
+  --type spdxjson \
+  --certificate-identity-regexp \
+    "https://github.com/ervicperezdev/spin-transaction-orchestrator/.github/workflows/release.yml" \
+  --certificate-oidc-issuer "https://token.actions.githubusercontent.com" \
+  ghcr.io/ervicperezdev/spin-transaction-orchestrator:<tag> \
+  | jq -r '.payload | @base64d | fromjson | .predicate'
+```
+
+The SBOM corresponds to the digest of the published image. Admission-controller
+enforcement of signature and SBOM policies is a separate infrastructure
+evolution and is not implemented here.
