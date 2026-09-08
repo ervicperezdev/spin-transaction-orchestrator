@@ -25,6 +25,7 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
@@ -65,13 +66,15 @@ class TransactionController {
             @ApiResponse(responseCode = "422", description = "Transaction validation rule failed", content = @Content(schema = @Schema(implementation = ApiErrorResponse.class), examples = @ExampleObject(value = "{\"code\":\"INVALID_AMOUNT\",\"message\":\"Transaction validation failed\",\"violations\":[]}"))),
             @ApiResponse(responseCode = "500", description = "Unexpected server failure", content = @Content(schema = @Schema(implementation = ApiErrorResponse.class), examples = @ExampleObject(value = "{\"code\":\"INTERNAL_ERROR\",\"message\":\"An unexpected error occurred\",\"violations\":[]}"))),
             @ApiResponse(responseCode = "503", description = "Payment provider unavailable", content = @Content(schema = @Schema(implementation = ApiErrorResponse.class), examples = @ExampleObject(value = "{\"code\":\"PAYMENT_PROVIDER_UNAVAILABLE\",\"message\":\"Payment processing is temporarily unavailable\",\"violations\":[]}")))})
-    TransactionResponse create(@Valid @RequestBody CreateTransactionRequest request) {
-        Transaction transaction = executeTransaction.execute(toCommand(request));
+    TransactionResponse create(@Valid @RequestBody CreateTransactionRequest request,
+            @RequestHeader(name = "Idempotency-Key", required = false) String idempotencyKey) {
+        Transaction transaction = executeTransaction.execute(toCommand(request, idempotencyKey));
         return toResponse(transaction);
     }
-    private ExecuteTransactionCommand toCommand(CreateTransactionRequest request) {
+    private ExecuteTransactionCommand toCommand(CreateTransactionRequest request, String idempotencyKey) {
         try {
-            return new ExecuteTransactionCommand(TransactionType.valueOf(request.type()), request.amount(), Currency.getInstance(request.currency()));
+            return new ExecuteTransactionCommand(TransactionType.valueOf(request.type()), request.amount(),
+                    Currency.getInstance(request.currency()), idempotencyKey);
         } catch (IllegalArgumentException exception) { throw new InvalidTransactionRequestException(); }
     }
     private TransactionResponse toResponse(Transaction transaction) {
