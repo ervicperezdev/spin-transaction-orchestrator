@@ -19,7 +19,7 @@ jobs:
     name: Compile
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: Set up Java 21 (Temurin)
         uses: actions/setup-java@v4
@@ -37,7 +37,7 @@ jobs:
     needs: compile
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: Set up Java 21 (Temurin)
         uses: actions/setup-java@v4
@@ -64,7 +64,7 @@ jobs:
     name: Gitleaks – Secret Scan
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           # Full history so gitleaks can scan all commits in the PR, not just HEAD.
           fetch-depth: 0
@@ -83,7 +83,7 @@ jobs:
     runs-on: ubuntu-latest
     continue-on-error: true   # remove for production: noise in auto ruleset
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: Run Semgrep SAST scan
         run: |
@@ -99,7 +99,7 @@ jobs:
     name: Trivy – SCA (Dependency Scan)
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: Scan dependencies for vulnerabilities
         run: |
@@ -120,7 +120,7 @@ jobs:
     name: Checkov – IaC Scan
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: Install Checkov
         run: pip install checkov --quiet
@@ -140,7 +140,7 @@ jobs:
     name: Helm Lint
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: Lint Helm chart (if present)
         if: hashFiles('helm/transaction-api/Chart.yaml') != ''
@@ -155,7 +155,7 @@ jobs:
     name: Hadolint – Dockerfile Lint
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: Lint Dockerfile
         run: docker run --rm -i hadolint/hadolint:v2.12.0 < Dockerfile
