@@ -20,19 +20,18 @@ move the managed dependency set as a coherent unit.
 | `micrometer-core` | 1.15.11 | 1.15.12 | Spring Boot BOM | CVE-2026-40983, CVE-2026-40984 |
 | `spring-data-commons` | 3.5.11 | 3.5.13 | Spring Boot BOM | CVE-2026-41695, CVE-2026-41716 |
 | `spring-expression` / `spring-webmvc` | 6.2.18 | 6.2.19 | Spring Boot BOM | CVE-2026-41850, CVE-2026-41842, CVE-2026-41845 |
-| `tomcat-embed-*` | 10.1.54 | 10.1.55 | Spring Boot BOM | Findings whose fixed version is 10.1.55 |
+| `tomcat-embed-{core,el,websocket}` | 10.1.54 | 10.1.59 | Spring Boot BOM property override | CVE-2026-65182, CVE-2026-65905, CVE-2026-68525 |
 
 ## Remaining Tomcat findings
 
-The scan calls for Tomcat 10.1.58 for part of its remaining findings. Maven
-Central does not publish `org.apache.tomcat.embed:tomcat-embed-{core,el,websocket}:10.1.58`;
-attempting that version fails dependency resolution. Spring Boot 3.5.16 manages
-the latest available compatible Tomcat 10.1 artifact, 10.1.55. No override or
-Trivy ignore rule is used.
+The scan calls for Tomcat 10.1.58 for part of its remaining findings. That
+version was not released to Maven Central, but the later compatible maintenance
+release `10.1.59` is published for all embedded Tomcat modules. Spring Boot
+3.5.16 otherwise manages 10.1.55, so the one supported `tomcat.version`
+property override advances the entire embedded Tomcat family together. This is
+limited to the upstream Tomcat maintenance line and was verified by the Maven
+dependency tree; no individual Tomcat module is declared directly.
 
-The residual findings therefore remain visible and fail the security gate until
-an upstream, resolvable patched Tomcat version is available through a compatible
-Spring Boot release. This service uses embedded Tomcat for HTTP ingress, so the
-findings are treated as applicable; mitigate operationally by keeping the
-service behind the platform ingress/WAF, restricting actuator exposure, and
-updating the BOM promptly when a patched release is published.
+No Trivy ignore rule is used. This service uses embedded Tomcat for HTTP ingress,
+so the findings are treated as applicable and the upgraded artifact must be
+rescanned in the final container image.
