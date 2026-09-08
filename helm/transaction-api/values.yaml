@@ -1,0 +1,81 @@
+replicaCount: 2
+
+image:
+  repository: "REPLACE_WITH_ECR_URI"
+  pullPolicy: IfNotPresent
+  tag: ""  # overridden by --set image.tag=$GIT_SHA
+
+nameOverride: ""
+fullnameOverride: ""
+
+service:
+  type: ClusterIP
+  port: 80
+  targetPort: 8080
+
+ingress:
+  enabled: true
+  annotations:
+    kubernetes.io/ingress.class: alb
+    alb.ingress.kubernetes.io/scheme: internet-facing
+    alb.ingress.kubernetes.io/target-type: ip
+  hosts:
+    - host: "transaction-api.example.com"
+      paths:
+        - path: /
+          pathType: Prefix
+  tls: []
+
+resources:
+  requests:
+    cpu: 250m
+    memory: 512Mi
+  limits:
+    cpu: 500m
+    memory: 1Gi
+
+autoscaling:
+  enabled: true
+  minReplicas: 2
+  maxReplicas: 10
+  targetCPUUtilizationPercentage: 70
+
+pdb:
+  minAvailable: 1
+
+serviceAccount:
+  create: true
+  annotations: {}  # Add eks.amazonaws.com/role-arn: <role-arn> for IRSA
+  name: ""
+
+podAnnotations: {}
+
+podSecurityContext:
+  runAsNonRoot: true
+  seccompProfile:
+    type: RuntimeDefault
+
+securityContext:
+  runAsNonRoot: true
+  allowPrivilegeEscalation: false
+  readOnlyRootFilesystem: true
+  capabilities:
+    drop:
+      - ALL
+
+config:
+  dbUrl: "jdbc:postgresql://REPLACE_WITH_RDS_ENDPOINT:5432/transactions"
+  paymentProviderBaseUrl: "https://REPLACE_WITH_PROVIDER_URL"
+  serverPort: "8080"
+
+externalSecret:
+  enabled: true
+  secretStoreRef: aws-secrets-manager
+  refreshInterval: 1h
+  remoteRef:
+    key: spin/transaction-api/prod
+
+networkPolicy:
+  enabled: true
+  ingressControllerNamespace: ingress-nginx
+  postgresqlPort: 5432
