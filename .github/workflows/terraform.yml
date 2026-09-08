@@ -49,7 +49,7 @@ jobs:
 
       # Terraform setup ───────────────────────────────────────────────────
       - name: Set up Terraform
-        uses: hashicorp/setup-terraform@v3
+        uses: hashicorp/setup-terraform@v4
         with:
           terraform_wrapper: true # wraps terraform output for step outputs
 
@@ -134,7 +134,7 @@ jobs:
 
       # Terraform setup ───────────────────────────────────────────────────
       - name: Set up Terraform
-        uses: hashicorp/setup-terraform@v3
+        uses: hashicorp/setup-terraform@v4
 
       - name: Terraform init
         working-directory: ${{ env.TF_DIR }}
