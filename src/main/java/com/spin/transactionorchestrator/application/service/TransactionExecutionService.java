@@ -7,6 +7,7 @@ import com.spin.transactionorchestrator.application.port.out.PaymentProviderResu
 import com.spin.transactionorchestrator.application.port.out.PaymentProviderStatus;
 import com.spin.transactionorchestrator.application.port.out.TransactionRepository;
 import com.spin.transactionorchestrator.domain.model.Transaction;
+import com.spin.transactionorchestrator.domain.model.TransactionRules;
 import java.time.Clock;
 import java.util.Objects;
 
@@ -23,6 +24,8 @@ public class TransactionExecutionService implements ExecuteTransaction {
 
     @Override
     public Transaction execute(ExecuteTransactionCommand command) {
+        Objects.requireNonNull(command, "command must not be null");
+        TransactionRules.validate(command.type(), command.amount(), command.currency());
         Transaction transaction = Transaction.pending(command.type(), command.amount(), command.currency(), clock.instant());
         PaymentProviderResult result = paymentProvider.execute(transaction);
 

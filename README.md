@@ -52,6 +52,13 @@ Copy `.env.example` only for local convenience; `.env` is ignored and must never
 
 Code lives below `com.spin.transactionorchestrator`. Future features should keep transport, application use cases, domain logic and infrastructure adapters in separate packages. This keeps the MVP structure simple while leaving clear seams for the provider adapter and persistence work.
 
+## Transaction validation errors
+
+Before calling a payment provider, the application validates transaction input with the
+following stable domain error codes: `INVALID_TRANSACTION_TYPE`, `INVALID_AMOUNT`,
+`UNSUPPORTED_CURRENCY`, and `DEBIT_AMOUNT_LIMIT_EXCEEDED`. The current transport adapter
+does not yet expose them over HTTP; it must map these codes without changing them when added.
+
 ## Build and test
 
 ```bash
