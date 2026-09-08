@@ -54,6 +54,7 @@ jobs:
         with:
           role-to-assume: ${{ secrets.AWS_DEPLOY_ROLE_ARN }}
           aws-region: ${{ vars.AWS_REGION }}
+          audience: sts.amazonaws.com
 
       # ECR login ───────────────────────────────────────────────────────────
       - name: Log in to Amazon ECR
@@ -135,6 +136,7 @@ jobs:
         with:
           role-to-assume: ${{ secrets.AWS_DEPLOY_ROLE_ARN }}
           aws-region: ${{ vars.AWS_REGION }}
+          audience: sts.amazonaws.com
 
       # kubeconfig ──────────────────────────────────────────────────────────
       - name: Configure kubeconfig for EKS
