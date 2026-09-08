@@ -27,6 +27,15 @@ Verify the application and database connection:
 curl http://localhost:8080/actuator/health
 ```
 
+Local operational and API documentation URLs:
+
+- Health: `http://localhost:8080/actuator/health`
+- OpenAPI JSON: `http://localhost:8080/v3/api-docs`
+- Swagger UI: `http://localhost:8080/swagger-ui/index.html`
+
+Only the Actuator health endpoint is exposed. Its response does not include health
+component details or application configuration values.
+
 Stop the local database while preserving data:
 
 ```bash
@@ -82,7 +91,8 @@ Results are ordered by `createdAt` descending and then `id` descending for deter
 ```
 
 Invalid paging or filter values return HTTP 400 with `code: "INVALID_QUERY_PARAMETER"`.
-The interactive OpenAPI documentation is available at `/swagger-ui/index.html` when the application is running.
+The OpenAPI document describes request, success, pagination/filter, and error contracts;
+it is available at `/v3/api-docs`, with interactive documentation at `/swagger-ui/index.html`.
 
 ## Build and test
 
