@@ -1,0 +1,20 @@
+spring:
+  application:
+    name: spin-transaction-orchestrator
+  datasource:
+    url: ${DB_URL:jdbc:postgresql://localhost:5432/transactions}
+    username: ${DB_USERNAME:transactions_app}
+    password: ${DB_PASSWORD:transactions_app}
+
+server:
+  port: ${SERVER_PORT:8080}
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info
+  endpoint:
+    health:
+      probes:
+        enabled: true
