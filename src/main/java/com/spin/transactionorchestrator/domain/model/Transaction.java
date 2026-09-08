@@ -29,6 +29,40 @@ public final class Transaction {
         return new Transaction(UUID.randomUUID(), type, amount, currency, createdAt);
     }
 
+    /**
+     * Reconstitutes a transaction previously persisted by the repository adapter.
+     * Terminal-state payloads are validated here so invalid persistence data cannot
+     * create a domain object that could not have been reached through its behavior.
+     */
+    public static Transaction rehydrate(UUID id, TransactionType type, BigDecimal amount, Currency currency,
+            Instant createdAt, TransactionStatus status, String providerReference, String rejectionReason) {
+        Transaction transaction = new Transaction(id, type, amount, currency, createdAt);
+        transaction.status = Objects.requireNonNull(status, "status must not be null");
+
+        switch (status) {
+            case PENDING -> {
+                if (providerReference != null || rejectionReason != null) {
+                    throw new IllegalArgumentException("Pending transactions must not contain a terminal-state payload");
+                }
+            }
+            case APPROVED -> {
+                transaction.providerReference = transaction.requireText(providerReference,
+                        "providerReference must not be blank for approved transactions");
+                if (rejectionReason != null) {
+                    throw new IllegalArgumentException("Approved transactions must not contain a rejection reason");
+                }
+            }
+            case REJECTED -> {
+                transaction.rejectionReason = transaction.requireText(rejectionReason,
+                        "rejection reason must not be blank for rejected transactions");
+                if (providerReference != null) {
+                    throw new IllegalArgumentException("Rejected transactions must not contain a provider reference");
+                }
+            }
+        }
+        return transaction;
+    }
+
     public void approve(String providerReference) {
         ensurePending();
         this.status = TransactionStatus.APPROVED;
