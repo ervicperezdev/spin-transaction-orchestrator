@@ -127,3 +127,41 @@ curl --fail http://localhost:8080/actuator/health
 
 Stop the container with `docker stop spin-transaction-orchestrator`; use
 `docker compose down` to stop the local database.
+
+## Container security checks
+
+The `Container security` GitHub Actions workflow runs for pull requests to
+`main` and for updates to `main`. It uses fixed tool image versions and has two
+independent gates:
+
+- **Hadolint** evaluates `Dockerfile` using `.hadolint.yaml`. The policy fails
+  on errors and currently has no ignored rules. A future exception must be
+  recorded in that file with its reason and reviewed in the corresponding PR.
+- **Trivy** builds the image locally in the runner, exports it to a temporary
+  tarball, and scans both OS/application vulnerabilities and embedded secrets.
+  It fails the job for any `HIGH` or `CRITICAL` finding, including unfixed
+  findings; the scan does not receive registry credentials, build secrets, or
+  application configuration.
+
+Run the same checks from a clean checkout (Docker is required):
+
+```bash
+docker run --rm -i hadolint/hadolint:v2.12.0 < Dockerfile
+docker build --tag spin-transaction-orchestrator:security .
+docker save --output image.tar spin-transaction-orchestrator:security
+docker run --rm \
+  --volume "$PWD:/workspace:ro" \
+  aquasec/trivy:0.58.1 image \
+  --input /workspace/image.tar \
+  --scanners vuln,secret \
+  --severity HIGH,CRITICAL \
+  --exit-code 1 \
+  --no-progress
+rm image.tar
+```
+
+Do not suppress exploitable critical findings. If a finding needs temporary
+triage, capture its package, installed/fixed versions, reachability, owner and
+remediation date in the PR or issue; keep the failing gate until an approved
+exception is documented and time-bounded. Never pass secrets as Docker build
+arguments or commit them into the image.
