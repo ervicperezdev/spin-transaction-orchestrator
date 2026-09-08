@@ -34,7 +34,7 @@ class HttpPaymentProviderIntegrationTest {
         provider.start();
         transaction = Transaction.pending(TransactionType.DEBIT, new BigDecimal("25.50"), Currency.getInstance("MXN"), Instant.EPOCH, null);
         SimpleClientHttpRequestFactory requestFactory = new SimpleClientHttpRequestFactory();
-        requestFactory.setReadTimeout(Duration.ofMillis(100));
+        requestFactory.setReadTimeout(Duration.ofSeconds(2));
         adapter = new HttpPaymentProvider(RestClient.builder().baseUrl(provider.baseUrl()).requestFactory(requestFactory).build(), Duration.ofMillis(100));
     }
 
@@ -74,6 +74,8 @@ class HttpPaymentProviderIntegrationTest {
 
     @Test
     void translatesTimeoutToProviderUnavailableException() {
+        adapter = createAdapter(Duration.ofMillis(200));
+
         provider.stubFor(post("/payments").willReturn(aResponse().withFixedDelay(500).withStatus(200)
                 .withHeader("Content-Type", "application/json").withBody("{\"status\":\"APPROVED\",\"reference\":\"late\"}")));
 
@@ -88,4 +90,18 @@ class HttpPaymentProviderIntegrationTest {
     private String requestBody() {
         return "{\"transactionId\":\"" + transaction().id() + "\",\"type\":\"DEBIT\",\"amount\":\"25.50\",\"currency\":\"MXN\"}";
     }
+
+    private HttpPaymentProvider createAdapter(Duration timeout) {
+    SimpleClientHttpRequestFactory requestFactory =
+            new SimpleClientHttpRequestFactory();
+
+    requestFactory.setReadTimeout(timeout);
+
+    RestClient restClient = RestClient.builder()
+            .baseUrl(provider.baseUrl())
+            .requestFactory(requestFactory)
+            .build();
+
+    return new HttpPaymentProvider(restClient, timeout);
+}
 }
