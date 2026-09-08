@@ -164,8 +164,10 @@ class TransactionExecutionServiceTest {
         }
 
         @Override
-        public List<Transaction> findAll() {
-            return List.copyOf(transactions);
+        public com.spin.transactionorchestrator.application.port.in.TransactionPage find(
+                com.spin.transactionorchestrator.application.port.in.FindTransactionsQuery query) {
+            return new com.spin.transactionorchestrator.application.port.in.TransactionPage(List.copyOf(transactions),
+                    query.page(), query.size(), transactions.size(), 1);
         }
     }
 }

@@ -70,6 +70,20 @@ following stable domain error codes: `INVALID_TRANSACTION_TYPE`, `INVALID_AMOUNT
 `UNSUPPORTED_CURRENCY`, and `DEBIT_AMOUNT_LIMIT_EXCEEDED`. The current transport adapter
 does not yet expose them over HTTP; it must map these codes without changing them when added.
 
+## List transactions
+
+`GET /transactions` returns a paged response and never exposes persistence entities. It defaults to
+`page=0` and `size=20`; `page` is zero-based and `size` must be between 1 and 100. Optional
+`status` (`PENDING`, `APPROVED`, `REJECTED`) and `type` (`DEBIT`, `CREDIT`) filters can be combined.
+Results are ordered by `createdAt` descending and then `id` descending for deterministic pagination.
+
+```json
+{"items": [], "page": 0, "size": 20, "totalItems": 0, "totalPages": 0}
+```
+
+Invalid paging or filter values return HTTP 400 with `code: "INVALID_QUERY_PARAMETER"`.
+The interactive OpenAPI documentation is available at `/swagger-ui/index.html` when the application is running.
+
 ## Build and test
 
 ```bash
