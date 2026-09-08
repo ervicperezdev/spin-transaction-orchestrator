@@ -59,3 +59,39 @@ Code lives below `com.spin.transactionorchestrator`. Future features should keep
 ```
 
 The project compiles with Java 21. No real financial data or credentials are required for local development.
+
+## Container image and smoke test
+
+Build the production image from a clean checkout:
+
+```bash
+docker build --tag spin-transaction-orchestrator:local .
+```
+
+The build stage uses Maven with Java 21. The runtime stage is
+`gcr.io/distroless/java21-debian12:nonroot`, so it contains only the application
+and Java runtime; Maven and build tools are not shipped. The application runs as
+the image's unprivileged `nonroot` user.
+
+Start the local database, then run the image with the database hostname set to
+the Compose service name:
+
+```bash
+docker compose up -d postgres
+docker run --rm --name spin-transaction-orchestrator \
+  --network spin-transaction-orchestrator_default \
+  --publish 8080:8080 \
+  --env DB_URL=jdbc:postgresql://postgres:5432/transactions \
+  --env DB_USERNAME=transactions_app \
+  --env DB_PASSWORD=transactions_app \
+  spin-transaction-orchestrator:local
+```
+
+In a second terminal, confirm the HTTP smoke test:
+
+```bash
+curl --fail http://localhost:8080/actuator/health
+```
+
+Stop the container with `docker stop spin-transaction-orchestrator`; use
+`docker compose down` to stop the local database.
