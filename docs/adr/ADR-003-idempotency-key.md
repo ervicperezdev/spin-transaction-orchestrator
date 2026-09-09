@@ -1,47 +1,31 @@
-# ADR-003: Idempotency-Key Header for Safe Retries
-
-**Status:** Accepted
-**Date:** 2026-09-08
-**Author:** Engineering & Security Lead
-
+# ADR-003: Encabezado de clave de idempotencia para retrys seguros
+**Estado:** Aceptado
+**Fecha:** 2026-09-08
+**Autor:** Líder de ingeniería y seguridad
 ---
-
-## Context
-
-Clients communicating over unreliable networks may not receive a response even when the server has successfully processed the request. Without a deduplication mechanism, a client retry after a network timeout would submit an identical transaction twice, potentially causing a double-charge. This is a critical correctness problem in any payment-processing system.
-
+## Contexto
+Es posible que los clientes que se comunican a través de redes no confiables no reciban una respuesta incluso cuando el servidor haya procesado exitosamente la solicitud. Sin un mecanismo de deduplicación, un retry de un cliente después de un timeout de la red enviaría una transacción idéntica dos veces, lo que podría provocar un doble cargo. Este es un problema crítico de corrección en cualquier sistema de procesamiento de pagos.
 ---
-
-## Decision
-
-Accept an optional `Idempotency-Key` HTTP header on transaction submission.
-
-Implementation:
-- The key is persisted alongside the transaction record in PostgreSQL with a `UNIQUE` constraint on the `idempotency_key` column.
-- On duplicate key receipt, the service returns the previously stored transaction result without re-executing business logic or calling the external provider.
-- The key is client-generated (UUID recommended) and must be unique per logical operation.
-- Keys are stored indefinitely in the current implementation; a TTL-based expiry policy is a future improvement.
-
+## Decisión
+Acepte un encabezado HTTP `Idempotency-Key` opcional al enviar la transacción.
+Implementación:
+- La clave persiste junto con el registro de transacción en PostgreSQL con una restricción `UNIQUE` en la columna `idempotency_key`.
+- Al recibir una clave duplicada, el servicio devuelve el resultado de la transacción previamente almacenado sin volver a ejecutar la lógica empresarial ni llamar al proveedor externo.
+- La clave la genera el cliente (se recomienda UUID) y debe ser única por operación lógica.
+- Las claves se almacenan indefinidamente en la implementación actual; una política de vencimiento basada en TTL es una mejora futura.
 ---
-
-## Consequences
-
-**Positive:**
-- Prevents double-charging on client retry: safe retries are a first-class guarantee.
-- The UNIQUE constraint at the database level provides a strong, race-condition-free deduplication backstop.
-- Aligns with industry standards (Stripe, Adyen, and most payment APIs implement the same pattern).
-
-**Negative / Known Gaps:**
-- **Does not cover the ambiguous-state scenario:** if the external payment provider successfully executed the charge but the application crashed before persisting the transaction and its idempotency key, a subsequent retry with the same key will re-execute the provider call, potentially resulting in a duplicate charge at the provider level. This gap requires a **reconciliation job** (roadmap item) that detects unacknowledged provider executions and resolves their state.
-- The idempotency key is optional; clients that do not provide one have no retry safety.
-- Key expiry and storage growth are not addressed in the initial implementation.
-
-> **Important:** The Idempotency-Key is a retry-safety mechanism, not a substitute for reconciliation. The known gap above is explicitly documented here to drive the reconciliation roadmap item.
-
+## Consecuencias
+**Positivo:**
+- Evita el doble cobro en el retry del cliente: los retrys seguros son una garantía de primera clase.
+- La restricción UNIQUE a nivel de base de datos proporciona un respaldo de deduplicación sólido y sin condiciones de carrera.
+- Se alinea con los estándares de la industria (Stripe, Adyen y la mayoría de las API de pago implementan el mismo patrón).
+**Brechas negativas/conocidas:**
+- **No cubre el escenario de estado ambiguo:** si el proveedor de pago externo ejecutó exitosamente el cargo pero la aplicación falló antes de persistir la transacción y su clave de idempotencia, un retry posterior con la misma clave volverá a ejecutar la llamada al proveedor, lo que podría resultar en un cargo duplicado a nivel de proveedor. Esta brecha requiere un **trabajo de conciliación** (elemento de la hoja de ruta) que detecte ejecuciones de proveedores no reconocidas y resuelva su estado.
+- La clave de idempotencia es opcional; los clientes que no proporcionan uno no tienen seguridad de retry.
+- La caducidad de claves y el crecimiento del almacenamiento no se abordan en la implementación inicial.
+> **Importante:** La clave de idempotencia es un mecanismo de seguridad de retry, no un sustituto de la conciliación. La brecha conocida anteriormente se documenta explícitamente aquí para impulsar el elemento de la hoja de ruta de conciliación.
 ---
-
-## Alternatives Considered
-
+## Alternativas consideradas
 | Alternative | Reason Rejected |
 |---|---|
 | **Request fingerprinting (hash of body fields)** | Brittle — minor payload variations produce different hashes; clients lose control over deduplication scope |

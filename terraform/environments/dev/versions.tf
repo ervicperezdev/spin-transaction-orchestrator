@@ -21,13 +21,17 @@ provider "aws" {
   }
 }
 
-data "aws_eks_cluster" "this" { name = module.eks.cluster_name }
-data "aws_eks_cluster_auth" "this" { name = module.eks.cluster_name }
-
 provider "helm" {
   kubernetes = {
-    host                   = data.aws_eks_cluster.this.endpoint
-    cluster_ca_certificate = base64decode(data.aws_eks_cluster.this.certificate_authority[0].data)
-    token                  = data.aws_eks_cluster_auth.this.token
+    host                   = module.eks.cluster_endpoint
+    cluster_ca_certificate = base64decode(module.eks.cluster_ca_certificate)
+    # Fetch renewable credentials when Helm connects, rather than retaining
+    # a short-lived token from the plan or an earlier step of a long apply.
+    # AWS CLI must use the same identity as the AWS provider (including in CI).
+    exec = {
+      api_version = "client.authentication.k8s.io/v1beta1"
+      command     = "aws"
+      args        = ["eks", "get-token", "--cluster-name", module.eks.cluster_name, "--region", var.aws_region, "--output", "json"]
+    }
   }
 }

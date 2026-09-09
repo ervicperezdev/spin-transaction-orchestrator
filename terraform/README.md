@@ -1,33 +1,59 @@
-# Terraform foundation
+# Base de infraestructura Terraform
 
-This directory is a reviewed **foundation**, not evidence of an AWS deployment. It creates no resources until an authorized operator runs an apply outside this repository workflow.
+Este directorio contiene la definición de infraestructura. El código y sus
+validaciones no acreditan que los recursos estén desplegados en AWS.
 
-## Layout
+## Estructura
 
-`environments/dev` composes the VPC, ECR, EKS, RDS and workload-IAM modules. Values are deliberately non-sensitive placeholders; real account identifiers, CIDRs approved by network engineering, and database credentials stay out of Git.
+`environments/dev` compone VPC, ECR, EKS, RDS, IAM y complementos de Kubernetes.
+Conserve credenciales y valores secretos fuera de Git. Las variables del
+ambiente contienen los identificadores y CIDRs reales; revise sus valores
+antes de planificar. El nombre del clúster en esta integración es
+`${project}-cluster`, mientras ECR usa `repository_name`.
 
-## Remote state
+## Estado remoto
 
-State is expected in an existing, separately governed S3 bucket. Configure it at init time so the bucket name, key and AWS account are not committed:
+El bucket S3 debe existir y tener versionado, cifrado, bloqueo de acceso público
+y políticas de acceso. Copie `backend.hcl.example` fuera del repositorio y
+reemplace sus placeholders. El archivo real `backend.hcl` se ignora en Git.
+Se usa bloqueo nativo S3 (`use_lockfile = true`), sin DynamoDB.
 
 ```bash
 cd terraform/environments/dev
-terraform init -backend-config=backend.hcl.example
+terraform init -backend-config=/ruta/privada/backend.hcl
 terraform fmt -check -recursive ../..
 terraform validate
-terraform plan -refresh=false -var-file=terraform.tfvars.example
+terraform plan -var-file=terraform.tfvars
 ```
 
-Copy `backend.hcl.example` outside the repository and replace its placeholders. S3 versioning, encryption, public-access blocking and access policies are bootstrap-account responsibilities. Native S3 lockfiles are used (`use_lockfile = true`); DynamoDB locking is intentionally not configured because current Terraform supports S3 lockfiles. Do not run `apply` from this repository or CI.
+La aplicación de cambios debe pasar por el proceso de infraestructura revisado;
+no hay un workflow de `apply` de producción en este repositorio. No ejecute
+`apply` desde CI como consecuencia de una validación estática.
 
-## Security boundaries and assumptions
+## Límites y supuestos de seguridad
 
-- The VPC supplies isolated database subnets and private application subnets; RDS is never publicly accessible.
-- The repository baseline disables public EKS endpoint access. `allowed_control_plane_cidrs` configures the public endpoint allowlist when enabled; it does not grant private connectivity. The proposed temporary development exception for GitHub-hosted runners is recorded in [EXC-001](../docs/security/EXC-001-eks-public-endpoint.md), with approval and live verification pending.
-- RDS uses encrypted storage, encrypted backups, deletion protection, a private subnet group and a security group that accepts PostgreSQL only from the EKS node security group.
-- ECR image scanning and immutable tags protect the registry boundary. Lifecycle retention is deliberately short only for untagged images.
-- GitHub Actions uses an OIDC-to-STS deployment role restricted to the configured repository and branch. It can push only to this ECR repository and discover only this EKS cluster; it has no static AWS keys or Secrets Manager access.
-- The transaction API uses a separate IRSA role restricted to its exact service account and the exact Secrets Manager ARNs it mounts through the AWS Secrets Store CSI driver. No Kubernetes Secret copy is created. Secrets Manager and RDS use AWS-managed KMS keys; no customer-managed KMS key is created. See `../docs/iam-secrets-deployment-guide.md` and `../docs/adr/ADR-006-oidc-iam-and-secrets.md`.
-- Terraform creates public/private edge routing, DNS-validated ACM, a regional WAF ACL, the EKS Pod Identity Agent, AWS Load Balancer Controller, and ExternalDNS. See `../docs/edge-architecture.md`. It does not create secret values, observability, the Secrets Store CSI driver/provider add-on, EKS OIDC provider bootstrap, EKS access entries/RBAC, or a production CI apply path.
+- VPC separa subredes de aplicaciones y base de datos; RDS no es público.
+- EKS habilita endpoints público y privado para desarrollo bajo
+  [EXC-001](../docs/security/EXC-001-eks-public-endpoint.md). Los CIDRs reales y
+  la evidencia operativa deben revisarse. La validación heredada rechaza
+  `0.0.0.0/1`, pero permite `0.0.0.0/0`; no garantiza una exposición restringida.
+- RDS tiene cifrado, respaldos, protección contra eliminación y acceso
+  PostgreSQL únicamente desde el security group de los nodos.
+- ECR conserva tags inmutables, escaneo y retención de imágenes sin tag.
+- GitHub usa OIDC para asumir un rol restringido al repositorio/ref configurado,
+  acceder al repositorio ECR y consultar el clúster. Las entradas de acceso EKS
+  declaran por separado al administrador y al rol de despliegue.
+- La aplicación usa IRSA para leer solo los ARN de Secrets Manager autorizados.
+  Los valores se montan como archivos y no se copian a Kubernetes Secrets.
+- Terraform instala EKS Pod Identity Agent, Load Balancer Controller,
+  ExternalDNS y Secrets Store CSI Driver con su proveedor AWS y CRDs. Aplique
+  los complementos antes de desplegar la aplicación; consulte la
+  [guía de IAM y secretos](../docs/iam-secrets-deployment-guide.md).
+- No se crean valores secretos, proveedor OIDC de EKS, observabilidad completa
+  ni un proceso de despliegue de producción. El acceso de red, la autorización
+  Kubernetes y los controles operativos requieren verificación en AWS.
 
-Known risk: an apply with an overly broad `allowed_control_plane_cidrs` value could expose EKS endpoint access. Validation rejects `0.0.0.0/0`, but network approval remains required.
+Antes de ejecutar el pipeline, compruebe que `AWS_DEPLOY_ROLE_ARN` y
+`EKS_CLUSTER_NAME` coincidan con las salidas del ambiente. El proveedor Helm
+obtiene credenciales renovables mediante AWS CLI; debe utilizar la misma
+identidad que Terraform. Consulte [ADR-006](../docs/adr/ADR-006-oidc-iam-and-secrets.md).

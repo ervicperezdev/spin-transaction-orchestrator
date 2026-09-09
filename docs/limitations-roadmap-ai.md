@@ -1,37 +1,31 @@
-# Limitations, roadmap and AI use
-
-## Current limitations
-
-- The API has no authentication or authorization. It is suitable only for a
-  controlled demo/local environment until an identity boundary is implemented.
-- The configured payment provider is an external dependency; the repository
-  supplies its HTTP contract but no local provider simulator.
-- Idempotency is optional. A duplicate key returns a stored transaction, but a
-  provider call that succeeds before the application persists the result remains
-  an ambiguous state and can still lead to a duplicate external operation.
-- Provider calls use configured connection/read timeouts. No retry, circuit
-  breaker, reconciliation worker, audit trail, metrics export, or alerting is
-  implemented in the application.
-- The PostgreSQL Docker Compose credentials are development-only defaults.
-  They must not be reused outside local development.
-
-## Prioritized roadmap
-
-1. Add OAuth2/JWT authentication, authorization policy and an audit event model.
-2. Persist an operation/outbox record before provider interaction and build a
-   reconciliation process for ambiguous provider outcomes.
-3. Add provider-specific idempotency propagation, safe retry classification,
-   circuit breaking and operational metrics/alerts.
-4. Provision and verify the AWS/EKS/RDS controls represented by the IaC and
-   Helm artifacts, including TLS, NetworkPolicy enforcement, IRSA and secrets
-   rotation.
-5. Add contract testing with a provider simulator and production readiness
-   testing (backup/restore, load, failure and incident exercises).
-
-## Use of AI
-
-AI assistance was used to accelerate drafting and reviewing documentation and
-code changes. It is not an authority for security, financial correctness or
-production readiness. Repository tests, human review, dependency scanning and
-environment-specific validation remain required before release. No credentials,
-customer data or production transaction data should be supplied to AI tools.
+# Limitaciones, hoja de ruta y uso de IA
+## Limitaciones actuales
+- La API no tiene autenticación ni autorización. Es adecuado sólo para un
+  entorno local/demo controlado hasta que se implemente un límite de identidad.
+- El proveedor de pago configurado es una dependencia externa; el repositorio
+  suministra su contrato HTTP pero no un simulador de proveedor local.
+- La idempotencia es opcional. Una clave duplicada devuelve una transacción almacenada, pero una
+  llamada al proveedor que tiene éxito antes de que la aplicación persista, el resultado permanece
+  un estado ambiguo y aún puede conducir a una operación externa duplicada.
+- Las llamadas de proveedores utilizan tiempos de espera de conexión/lectura configurados. Sin retry, circuito
+  interruptor, trabajador de conciliación, seguimiento de auditoría, exportación de métricas o alertas.
+  implementado en la aplicación.
+- Las credenciales de PostgreSQL Docker Compose son predeterminadas solo para desarrollo.
+  No deben reutilizarse fuera del desarrollo local.
+## Hoja de ruta priorizada
+1. Agregue autenticación OAuth2/JWT, política de autorización y un modelo de eventos de auditoría.
+2. Conservar un registro de operación/bandeja de salida antes de la interacción con el proveedor y crear un
+   proceso de conciliación para resultados ambiguos del proveedor.
+3. Agregue propagación de idempotencia específica del proveedor, clasificación de retry seguro,
+   corte de circuito y métricas/alertas operativas.
+4. Proveer y verificar los controles AWS/EKS/RDS representados por el IaC y
+   Artefactos de Helm, incluidos TLS, aplicación de NetworkPolicy, IRSA y secretos
+   rotación.
+5. Agregue pruebas por contrato con un simulador de proveedor y preparación para la producción.
+   pruebas (copia de seguridad/restauración, carga, ejercicios de fallas e incidentes).
+## Uso de la IA
+La asistencia de IA se utilizó para acelerar la redacción y revisión de la documentación y
+cambios de código. No es una autoridad de seguridad, corrección financiera o
+preparación para la producción. Pruebas de repositorio, revisión humana, escaneo de dependencias y
+La validación específica del entorno sigue siendo necesaria antes del lanzamiento. Sin credenciales,
+Los datos de los clientes o los datos de las transacciones de producción deben suministrarse a las herramientas de IA.

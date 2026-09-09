@@ -1,136 +1,130 @@
-# EXC-001 — Temporary public EKS API access for the challenge
+# EXC-001 — Acceso público temporal al API de EKS para el challenge
 
-## Decision record
+## Registro de decisión
 
-| Field | Record |
+| Campo | Registro |
 | --- | --- |
-| Tracking ID | EXC-001; this versioned document is the tracking record. |
-| Recorded | 2026-09-09 |
-| Disposition | Proposed time-bound risk acceptance for the development demonstration; not a false positive. |
-| Status | Documented at the repository owner's request. Deployment evidence and security-owner approval are pending; no formal approval is asserted by this record. |
-| Proposed implementation / risk owner | Repository owner, Ervic Pérez; responsible for verification, review and closure. |
-| Approval authority | Security lead or delegated security owner, as required by the [risk assessment policy](vulnerability-risk-assessment.md). Record the approver and dated PR review before activation. |
-| Scope | Only the challenge's `dev` EKS API endpoint, resource `module.eks.aws_eks_cluster.this`, defined in `terraform/modules/eks/main.tf`. No production authorization. |
-| Proposed review | 2026-09-16, and before any deployment or access change. |
-| Proposed expiry | 2026-09-23, or completion of the demonstration or introduction of real data, whichever occurs first. Approval must confirm or shorten this window; it does not restart on deployment. |
-| Finding | `terraform.lang.security.eks-public-endpoint-enabled.eks-public-endpoint-enabled` |
-| Source | Owner-supplied CI log from `returntocorp/semgrep:1.99.0`; image digest `sha256:ae27024c16f7848cdbfd49c24ed0b78b13f13b85fcd7b87c679aaa8b0c0dce98`. Run URL and affected commit SHA are pending. |
+| Identificador | EXC-001; este documento versionado es el registro de seguimiento. |
+| Fecha | 2026-09-09 |
+| Disposición | Aceptación temporal de riesgo propuesta para la demostración de desarrollo; no es un falso positivo. |
+| Estado | Configuración pública y exclusión puntual declaradas en la integración. La aprobación formal y la evidencia del despliegue siguen pendientes. |
+| Responsable propuesto | Ervic Pérez, propietario del repositorio; responsable de verificar, revisar y cerrar la excepción. |
+| Autoridad de aprobación | Líder de seguridad o responsable delegado, según la [política de riesgos](vulnerability-risk-assessment.md). Registrar identidad y revisión fechada del PR. |
+| Alcance | Solo el API EKS de `dev`: `module.eks.aws_eks_cluster.this`, definido en `terraform/modules/eks/main.tf`. No autoriza producción. |
+| Revisión propuesta | 2026-09-16 y antes de cualquier cambio de acceso o despliegue. |
+| Vencimiento propuesto | 2026-09-23, fin de la demostración o introducción de datos reales, lo que ocurra primero. La aprobación debe confirmar o acortar la vigencia; desplegar no reinicia el plazo. |
+| Regla | `terraform.lang.security.eks-public-endpoint-enabled.eks-public-endpoint-enabled` |
+| Fuente | Log de CI proporcionado por el propietario: `returntocorp/semgrep:1.99.0`, digest `sha256:ae27024c16f7848cdbfd49c24ed0b78b13f13b85fcd7b87c679aaa8b0c0dce98`. Faltan URL de ejecución y SHA del commit afectado. |
 
-## Business rationale and technical boundary
+## Justificación y límites técnicos
 
-The challenge demonstrates an automated application deployment using standard
-GitHub-hosted `ubuntu-latest` runners. These runners have no configured route
-into the EKS VPC and do not provide a dedicated static egress IP for this job.
-A private endpoint would require private connectivity or a deployment runner
-inside the VPC. That additional infrastructure is deferred for the limited
-demonstration period.
+El challenge demuestra el despliegue automatizado desde runners estándar de
+GitHub, `ubuntu-latest`. El job no dispone de conectividad privada hacia la VPC
+ni de una IP de salida estática dedicada. Un endpoint privado requiere añadir
+esa conectividad o ejecutar el despliegue desde un runner dentro de la VPC.
+Esa infraestructura adicional se difiere durante la demostración temporal.
 
-The proposed exception permits `endpoint_public_access = true` while retaining
-`endpoint_private_access = true`. If standard hosted runners require
-`public_access_cidrs = ["0.0.0.0/0"]`, acceptance must explicitly cover access
-from **all IPv4 source addresses**, not describe it as a GitHub-only allowlist.
-There is no authorization here for IPv6-wide access or other environments.
-An administrator's `/32` alone does not provide access for the hosted runner.
+La integración declara `endpoint_public_access = true` y mantiene
+`endpoint_private_access = true`. Los CIDRs efectivos proceden de las variables
+del ambiente y deben verificarse en AWS. Si se utiliza `0.0.0.0/0`, la aceptación
+debe cubrir explícitamente **todas las direcciones de origen IPv4**, no describir
+el acceso como exclusivo de GitHub. Una IP administrativa `/32` no habilita al
+runner público. Esta excepción no cubre acceso IPv6 universal ni otros ambientes.
 
-At documentation time, the repository baseline sets public access to `false`
-and rejects `0.0.0.0/0` in variable validation. The reported finding therefore
-does not establish the state of the current checkout or deployed cluster.
-This record changes neither setting. Any activation must identify the exact
-commit, reviewed plan and actual CIDRs; any validation exception must remain
-explicitly scoped to the development environment.
+La documentación inicial se redactó sobre una base con endpoint privado. La
+integración de `feature/docs-espanol` cambia ese comportamiento declarativo; no
+constituye evidencia de un `apply`. La validación heredada rechaza `0.0.0.0/1`,
+pero no `0.0.0.0/0`: no debe presentarse como una protección efectiva contra
+exposición universal. Cualquier cambio a esa validación debe revisarse junto
+con el alcance temporal de desarrollo.
 
-This concerns the Kubernetes management API, independently of the application's
-public ALB, DNS and TLS configuration. Successful AWS OIDC authentication or
-`aws eks update-kubeconfig` does not establish Kubernetes authorization.
+El API de administración de Kubernetes es independiente del ALB, DNS y TLS de
+la aplicación. Autenticarse mediante OIDC en AWS o ejecutar
+`aws eks update-kubeconfig` no demuestra autorización en Kubernetes.
 
-## Risk assessment
+## Evaluación del riesgo
 
-The finding is valid when public endpoint access is enabled. Internet exposure
-allows external hosts to reach the API authentication boundary, increasing
-exposure to scanning, unauthorized authentication attempts, API availability
-attacks and abuse of stolen authorized credentials. An authenticated attacker
-could change workloads or access Kubernetes data within the compromised
-principal's permissions; cluster-admin compromise has cluster-wide impact.
+El hallazgo es válido cuando se habilita el endpoint público. La exposición
+permite llegar a la frontera de autenticación desde Internet y aumenta la
+superficie de reconocimiento, intentos de acceso, ataques de disponibilidad y
+abuso de credenciales autorizadas robadas. Un atacante autenticado podría
+modificar cargas y consultar datos según los permisos del principal; comprometer
+un administrador afecta al clúster completo.
 
-The qualitative residual risk is **High pending verification**. This is not a
-scanner severity or CVSS score, and no numerical score is assigned to this
-configuration finding. Short duration and synthetic data limit the intended
-business exposure but do not remove the technical risk. Failure to demonstrate
-the controls below prevents activation under this exception.
+El riesgo residual cualitativo se considera **alto hasta verificar los
+controles**. No es una severidad del escáner ni una puntuación CVSS. La duración
+limitada y los datos sintéticos reducen el impacto previsto de negocio, pero
+no eliminan el riesgo técnico. No se presume eficaz ningún control sin evidencia.
 
-The application's WAF, ALB security group and pod NetworkPolicies do **not**
-protect the EKS public API endpoint. They are not compensating controls for
-this finding. Logging provides detection, not prevention.
+WAF, el security group del ALB y las NetworkPolicies de los pods **no protegen
+el endpoint público de EKS**. No se consideran controles compensatorios de este
+hallazgo. Los registros permiten detectar actividad, no impedirla.
 
-## Required controls and verification evidence
+## Controles requeridos y evidencia
 
-| Control | Required evidence before activation |
+| Control | Evidencia requerida |
 | --- | --- |
-| Temporary, isolated demonstration | Confirm the account/cluster/environment, owner and teardown date; use synthetic transactions and test credentials only. |
-| Short-lived CI credentials | Verify GitHub OIDC trust restricts the intended repository/ref and audience; record the actual assumed IAM role. No static AWS keys in Actions. |
-| Kubernetes access control | Verify the deploy role has its own EKS access entry or supported identity mapping and permissions limited to application deployment in `transaction-api`. Keep platform administration separate; demonstrate denied access outside the permitted scope. |
-| Trusted deployment source | Verify the deployment trigger and repository branch protections. Untrusted PR code must not obtain the deployment identity. Workflow definitions alone do not prove repository settings. |
-| Private node connectivity | Verify `endpointPrivateAccess = true`; retain private application/database subnets and RDS isolation. This limits other exposure but does not restrict the public API. |
-| Detection and review | Verify API, audit and authenticator logs are delivered to CloudWatch; review failed authentication and privileged changes before/after each demonstration. Record log retention and the responsible reviewer. |
-| Controlled infrastructure change | Retain the reviewed Terraform plan, apply result and live endpoint/CIDR configuration. Do not grant the application deploy role permissions to widen EKS endpoint access. |
+| Demostración temporal y aislada | Cuenta, clúster, ambiente, responsable y fecha de retirada; solo transacciones sintéticas y credenciales de prueba. |
+| Credenciales CI temporales | Confianza OIDC restringida al repositorio/ref y audiencia previstos; ARN real del rol asumido; ausencia de claves AWS estáticas en Actions. |
+| Acceso Kubernetes | Entrada EKS o mapeo admitido para el rol CI, con permisos de despliegue limitados a `transaction-api`; administración de plataforma separada y pruebas de denegación fuera del alcance. |
+| Origen confiable | Disparadores y protección real de ramas; código de PR no confiable sin acceso a la identidad de despliegue. Un workflow no acredita la configuración de GitHub. |
+| Conectividad interna | `endpointPrivateAccess = true`, subredes privadas de aplicaciones y aislamiento de RDS. No restringe por sí mismo el API público. |
+| Detección y revisión | Entrega de logs API, audit y authenticator a CloudWatch, retención y responsable de revisar accesos fallidos/cambios privilegiados antes y después de la demostración. |
+| Cambio controlado | Plan revisado, resultado de aplicación y CIDRs reales. El rol de despliegue de la aplicación no debe poder ampliar la exposición del endpoint. |
 
-No live verification of these controls was performed while writing this record.
-Keep evidence links in the table below; do not attach tokens, kubeconfig
-credentials, Terraform state or unredacted plans containing secrets.
+No se verificaron estos controles en AWS al preparar el documento. Conservar
+enlaces a evidencia sin publicar tokens, credenciales de kubeconfig, estado
+Terraform ni planes sin depurar que contengan secretos.
 
-| Audit artifact | Evidence status |
+| Artefacto de auditoría | Estado |
 | --- | --- |
-| Source scan run URL, commit SHA and full finding | Pending; only the supplied log excerpt is available. |
-| Approver, approval date and reviewed PR | Pending. |
-| Target cluster ARN, deployment revision and actual CIDRs | Pending. |
-| Reviewed plan and deployment result | Pending. |
-| IAM/OIDC, EKS permissions and negative authorization checks | Pending. |
-| Logging, branch protection and synthetic-data verification | Pending. |
-| Review outcome and closure evidence | Pending. |
+| Ejecución de origen, commit y hallazgo completo | Pendiente; disponible solo el fragmento de log proporcionado. |
+| Aprobador, fecha y PR revisado | Pendiente. |
+| ARN del clúster, revisión desplegada y CIDRs | Pendiente. |
+| Plan revisado y resultado de despliegue | Pendiente. |
+| IAM/OIDC, permisos EKS y pruebas de denegación | Pendiente. |
+| Logs, protección de ramas y datos sintéticos | Pendiente. |
+| Resultado de revisión y evidencia de cierre | Pendiente. |
 
-## Scanner treatment
+## Tratamiento en Semgrep
 
-At the repository owner's explicit request, a rule-specific `nosemgrep`
-annotation has been added immediately above `aws_eks_cluster.this` in
-`terraform/modules/eks/main.tf`. It references EXC-001 and the 2026-09-23
-expiry, and suppresses only the identified rule at that resource. The current
-endpoint remains private, so the annotation does not itself activate the
-network exception. Formal approval and deployment evidence remain pending.
-The existing `--error` behavior and Quality Gate remain in force for other
-findings. Do not exclude the Terraform directory, disable the scanner job or
-introduce `continue-on-error` to implement this exception.
+Por solicitud explícita del propietario, se conserva una anotación `nosemgrep`
+inmediatamente antes de `aws_eks_cluster.this` en `terraform/modules/eks/main.tf`.
+Solo afecta a la regla identificada, referencia EXC-001 y vence el 2026-09-23.
+La exclusión no acredita aprobación formal ni configuración efectiva en AWS.
 
-Re-run the original scanner after any suppression and demonstrate that other
-findings remain blocking. Expiry is a manual review obligation here; the
-repository does not currently enforce this document's dates automatically.
+Se conserva `--error` y el bloqueo de los demás hallazgos. No excluir el
+directorio Terraform, desactivar el job ni añadir `continue-on-error`.
+Reejecutar el escáner original y demostrar que los demás hallazgos siguen
+bloqueando. La caducidad requiere seguimiento manual: CI no evalúa estas fechas.
 
-## Remediation and closure
+## Remediación y cierre
 
-1. Establish private deployment connectivity: a trusted runner in the VPC or
-   an authenticated private network path from the hosted runner. Provide
-   administrator access through VPN or an SSM-managed administration host.
-2. Verify DNS, routing, HTTPS security-group access and EKS authorization for
-   both the deployment and administrator identities before disabling public
-   access. A public runner with static egress is an interim way to narrow
-   CIDRs, but does not satisfy the private-endpoint closure criterion.
-3. Apply `endpoint_public_access = false` while retaining private access, or
-   tear down the demonstration environment through the reviewed process.
-4. Remove any associated scanner suppression and development-only validation
-   bypass; rerun Semgrep and record the clean result at the closing commit.
-5. Retain live endpoint configuration and a successful private deployment as
-   evidence, or evidence that the demonstration cluster was removed.
+1. Establecer conectividad privada del despliegue mediante un runner en la VPC
+   o una conexión autenticada desde el runner hospedado. Para administración,
+   proporcionar VPN o un host administrado mediante SSM.
+2. Verificar DNS, rutas, HTTPS en security groups y autorización EKS para ambas
+   identidades antes de deshabilitar el endpoint público. Una IP estática de
+   runner permite restringir CIDRs como medida intermedia; no satisface el
+   criterio de endpoint privado.
+3. Aplicar `endpoint_public_access = false` conservando acceso privado, o
+   retirar el ambiente de demostración mediante el proceso revisado.
+4. Retirar la exclusión de Semgrep y cualquier excepción de validación; repetir
+   el análisis y conservar el resultado en el commit de cierre.
+5. Conservar configuración real y despliegue privado exitoso, o evidencia de
+   eliminación del clúster de demostración.
 
-Close at the earliest expiry trigger. Suspected credential compromise,
-unexpected access, missing controls or production use requires immediate
-reassessment and restriction of access under the incident-response process.
-An extension requires a new dated review, rationale and expiry; it is never
-automatic. Until private connectivity is ready, disabling public access will
-also interrupt deployments from the current hosted runners.
+Cerrar al primer vencimiento aplicable. Un indicio de compromiso, acceso
+inesperado, ausencia de controles o uso en producción requiere reevaluación
+inmediata y restricción según el proceso de incidentes. Extender la excepción
+requiere revisión fechada, justificación y nueva caducidad; nunca es automático.
+Deshabilitar el endpoint público antes de preparar conectividad privada
+interrumpirá los despliegues desde los runners actuales.
 
-## References
+## Referencias
 
-- [EKS endpoint access](https://docs.aws.amazon.com/eks/latest/userguide/config-cluster-endpoint.html)
-- [GitHub-hosted runner IP address limitations](https://docs.github.com/en/actions/reference/runners/github-hosted-runners)
-- [Repository vulnerability and exception policy](vulnerability-risk-assessment.md)
-- [Cloud security operations](../cloud-security-operations.md)
-- [Incident response](../incident-response.md)
+- [Acceso al endpoint EKS](https://docs.aws.amazon.com/eks/latest/userguide/config-cluster-endpoint.html)
+- [Direcciones IP de runners de GitHub](https://docs.github.com/en/actions/reference/runners/github-hosted-runners)
+- [Política de vulnerabilidades y excepciones](vulnerability-risk-assessment.md)
+- [Operación de seguridad cloud](../cloud-security-operations.md)
+- [Respuesta a incidentes](../incident-response.md)

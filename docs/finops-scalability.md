@@ -1,36 +1,28 @@
-# FinOps and scalability baseline
-
-## Scope and assumptions
-
-This is a capacity-planning baseline, not an AWS bill or a claim that the
-environment has been provisioned. Prices vary by region, usage, commitments,
-data transfer and AWS price changes; estimate them with the AWS Pricing
-Calculator using the production region and observed volumes before approval.
-
-The baseline is a public, synchronous transaction API with PostgreSQL as the
-system of record. It assumes a modest initial production load, a two-AZ VPC,
-three API replicas, and one managed EKS node group sized to carry the API plus
-the required platform add-ons. Transaction execution must remain idempotent;
-scaling application pods never makes the database or payment provider
-infinitely scalable.
-
-## Why EKS despite its cost
-
-EKS is deliberately **not** selected as the cheapest way to run one API. ECS
-Fargate is the lower-operations, lower-baseline-cost option for a single
-service without Kubernetes expertise. EKS is justified here by the security
-and platform requirements already represented in this repository: NetworkPolicy,
-Pod Security settings, Kyverno admission policies, Helm-based delivery, AWS
-Load Balancer Controller, ExternalDNS, and EKS Pod Identity. This lets the
-team enforce and audit the same Kubernetes controls across future workloads.
-
-The decision must be revisited if the platform remains a single low-volume
-service or the team cannot operate EKS add-ons and upgrades. In that case,
-move the workload to ECS Fargate rather than retaining EKS for demonstration
-value alone. ADR-004 records the corresponding architectural trade-off.
-
-## Cost drivers and controls
-
+# FinOps y línea base de escalabilidad
+## Alcance y supuestos
+Esta es una base de planificación de capacidad, no una factura de AWS ni una afirmación de que el
+Se ha aprovisionado el entorno. Los precios varían según la región, el uso, los compromisos,
+transferencia de datos y cambios de precios de AWS; estimarlos con el precio de AWS
+Calculadora que utiliza la región de producción y los volúmenes observados antes de la aprobación.
+La línea de base es una API de transacciones síncrona y pública con PostgreSQL como
+sistema de registro. Se supone una carga de producción inicial modesta, un VPC de dos AZ,
+tres réplicas de API y un grupo de nodos EKS administrado del tamaño adecuado para transportar la API más
+los complementos de plataforma necesarios. La ejecución de la transacción debe seguir siendo idempotente;
+escalar los pods de aplicaciones nunca hace que la base de datos o el proveedor de pagos
+infinitamente escalable.
+## Por qué EKS a pesar de su coste
+EKS **no** se selecciona deliberadamente como la forma más barata de ejecutar una API. ECS
+Fargate es la opción de menor costo de operación y base para un solo
+servicio sin experiencia en Kubernetes. EKS se justifica aquí por la seguridad.
+y requisitos de plataforma ya representados en este repositorio: NetworkPolicy,
+Configuración de seguridad del pod, políticas de admisión de Kyverno, entrega basada en Helm, AWS
+AWS Load Balancer Controller, ExternalDNS y EKS Pod Identity. Esto permite que el
+El equipo aplica y audita los mismos controles de Kubernetes en cargas de trabajo futuras.
+La decisión debe revisarse si la plataforma sigue siendo una única plataforma de bajo volumen.
+El servicio o el equipo no pueden operar complementos y actualizaciones de EKS. En ese caso,
+trasladar la carga de trabajo a ECS Fargate en lugar de conservar EKS para la demostración
+valor solo. ADR-004 registra la compensación arquitectónica correspondiente.
+## Controladores y controles de costos
 | Component | Baseline / driver | Control and review trigger |
 | --- | --- | --- |
 | EKS | Fixed cluster control-plane fee plus EC2 worker capacity, EBS, and add-ons. Requests, not limits, determine bin-packing. | Start with the current 2-node on-demand group and right-size from 14 days of CPU/memory percentiles. Review when requested capacity exceeds 70% of allocatable capacity or pods remain pending. Use committed compute only after stable utilization is proven. |
@@ -40,52 +32,41 @@ value alone. ADR-004 records the corresponding architectural trade-off.
 | ALB, Route 53, ACM and WAF | ALB hours/LCUs, DNS zones/queries, WAF Web ACL/rules/requests and logging destination. ACM public certificates have no certificate fee; logs can dominate at high volume. | Keep WAF managed/rate rules minimal and intentional; review LCU dimensions and WAF request/rule counts monthly. Sample/redact and retain WAF/ALB/application logs according to the approved retention policy, not indefinitely. |
 | Observability | CloudWatch metric, ingestion, retention, query, trace and alarm charges grow with cardinality and volume. | Use the bounded-cardinality signals in `docs/observability.md`; exclude secrets and unbounded identifiers. Set retention per log class and alert on ingestion anomalies. |
 
-Secrets Manager, AWS Load Balancer Controller, ExternalDNS and EKS Pod Identity
-are part of the approved baseline. External Secrets Operator and
-customer-managed KMS keys are intentionally out of scope and must not be
-silently added to estimates.
-
-## Scaling policy and guardrails
-
-The Helm chart uses an HPA with production bounds of 3–20 replicas and a 60%
-CPU target. That target is only a starting hypothesis: validate it under a
-representative load test after metrics-server and capacity provisioning are
-present. Pair the HPA with node capacity scaling; HPA alone cannot schedule a
-pod onto a full node group.
-
-Before increasing `maxReplicas`, calculate the database connection ceiling:
-
+Secrets Manager, AWS Load Balancer Controller, ExternalDNS y EKS Pod Identity
+forman parte de la línea base aprobada. Operador de secretos externos y
+Las claves KMS administradas por el cliente están intencionalmente fuera del alcance y no deben
+añadido silenciosamente a las estimaciones.
+## Política de escalamiento y barreras de seguridad
+El gráfico Helm utiliza un HPA con límites de producción de 3 a 20 réplicas y un 60 %.
+Objetivo de la CPU. Ese objetivo es sólo una hipótesis de partida: validarlo bajo un
+prueba de carga representativa después de que el servidor de métricas y el aprovisionamiento de capacidad sean
+presente. Empareje el HPA con el escalamiento de la capacidad del nodo; HPA por sí sola no puede programar una
+pod en un grupo de nodos completo.
+Antes de aumentar `maxReplicas`, calcule el límite de conexión de la base de datos:
 `maximum API replicas × Hikari maximumPoolSize + admin/migration reserve < RDS max connections`
-
-Set a conservative Hikari pool explicitly for the chosen RDS class, reserve
-connections for operations and migrations, and load-test provider latency.
-Back-pressure, timeouts and circuit breaking are preferred to unlimited pools
-or uncontrolled retries. PDB `minAvailable: 2` protects a three-replica
-production deployment during voluntary disruptions; revisit it together with
-replica count and availability objectives.
-
-Capacity reviews use p95/p99 latency, error rate, CPU throttling, memory
-working set/OOMs, HPA desired-vs-current replicas, pending pods, node
-allocatable/requested resources, RDS connections/latency/storage and NAT/WAF/
-log volume. A change is accepted only when it improves a measured bottleneck
-without breaching the database or provider budgets.
-
-## Data and asynchronous evolution
-
-The transaction history endpoint already uses deterministic keyset pagination
-(`createdAt DESC, id DESC`) and has a matching database index. Keep it instead
-of offset pagination as the table grows: it avoids progressively scanning and
-discarding earlier pages and is stable when new transactions arrive.
-
-Kafka is not a baseline dependency. Introduce it only when measured coupling
-between the synchronous transaction path and downstream side effects causes
-latency, availability or throughput failures. Use an outbox pattern, idempotent
-consumers, schema/version governance, retention and replay/runbook ownership;
-otherwise Kafka adds operational cost and failure modes without solving a
-current constraint.
-
-## Decision checkpoints
-
+Establecer un grupo Hikari conservador explícitamente para la clase RDS elegida, reservar
+conexiones para operaciones y migraciones, y latencia del proveedor de pruebas de carga.
+Se prefieren la contrapresión, los tiempos de espera y la interrupción del circuito a los grupos ilimitados.
+o retrys incontrolados. PDB `minAvailable: 2` protege una réplica de tres
+despliegue de producción durante interrupciones voluntarias; revisarlo junto con
+objetivos de disponibilidad y recuento de réplicas.
+Las revisiones de capacidad utilizan latencia p95/p99, tasa de error, aceleración de la CPU y memoria.
+conjunto de trabajo/OOM, réplicas HPA deseadas versus actuales, pods pendientes, nodo
+recursos asignables/solicitados, conexiones RDS/latencia/almacenamiento y NAT/WAF/
+volumen de registro. Se acepta un cambio sólo cuando mejora un cuello de botella medido.
+sin vulnerar la base de datos ni los presupuestos de los proveedores.
+## Datos y evolución asincrónica
+El endpoint del historial de transacciones ya utiliza paginación de conjunto de claves determinista
+(`createdAt DESC, id DESC`) y tiene un índice de base de datos coincidente. Guárdalo en su lugar
+de paginación desplazada a medida que la tabla crece: evita el escaneo progresivo y
+descartando páginas anteriores y es estable cuando llegan nuevas transacciones.
+Kafka no es una dependencia básica. Introducirlo sólo cuando el acoplamiento esté medido.
+entre la ruta de transacción sincrónica y las causas de los efectos secundarios posteriores
+fallas de latencia, disponibilidad o rendimiento. Utilice un patrón de bandeja de salida, idempotente
+consumidores, gobernanza de esquema/versión, retención y propiedad de reproducción/runbook;
+De lo contrario, Kafka agrega costos operativos y modos de falla sin resolver un problema.
+restricción actual.
+## Puntos de control de decisión
 | When | Decision |
 | --- | --- |
 | Before production | Pricing Calculator estimate, load test, RDS connection budget, log retention, NAT endpoint analysis and an owner for EKS upgrades/add-ons. |

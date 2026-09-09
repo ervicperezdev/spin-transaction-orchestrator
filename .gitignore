@@ -10,3 +10,6 @@ target/
 *.tfstate.*
 *.tfvars
 !*.tfvars.example
+
+# Configuración local del estado remoto; conservar solo la plantilla.
+**/backend.hcl

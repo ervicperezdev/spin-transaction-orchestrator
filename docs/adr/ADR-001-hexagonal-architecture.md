@@ -1,47 +1,31 @@
-# ADR-001: Hexagonal Architecture (Ports & Adapters)
-
-**Status:** Accepted
-**Date:** 2026-09-08
-**Author:** Engineering & Security Lead
-
+# ADR-001: Arquitectura Hexagonal (Puertos y Adaptadores)
+**Estado:** Aceptado
+**Fecha:** 2026-09-08
+**Autor:** Líder de ingeniería y seguridad
 ---
-
-## Context
-
-The transaction orchestrator needs to remain maintainable and independently testable as infrastructure adapters evolve. Business rules — such as idempotency enforcement, amount validation, and transaction state transitions — must not be coupled to framework-specific concerns like JPA annotations, Spring HTTP types, or AWS SDK calls. Coupling business logic to infrastructure makes security-sensitive rules harder to audit, test in isolation, and evolve safely.
-
+## Contexto
+El orquestador de transacciones debe seguir siendo mantenible y comprobable de forma independiente a medida que evolucionan los adaptadores de infraestructura. Las reglas comerciales, como la aplicación de idempotencia, la validación de cantidades y las transiciones de estado de transacciones, no deben combinarse con preocupaciones específicas del marco, como anotaciones JPA, tipos Spring HTTP o llamadas al SDK de AWS. Acoplar la lógica empresarial a la infraestructura hace que las reglas sensibles a la seguridad sean más difíciles de auditar, probar de forma aislada y evolucionar de forma segura.
 ---
-
-## Decision
-
-Adopt **Hexagonal Architecture (Ports & Adapters)** as the structural pattern for the service.
-
-Structure:
-- `domain/` — pure Java domain model; no framework dependencies
-- `application/` — use-case services and port interfaces; no JPA, no HTTP, no AWS
-- `adapter/in/` — inbound adapters (REST controller, consumers)
-- `adapter/out/` — outbound adapters (JPA persistence, provider HTTP client)
-- `infrastructure/` — Spring Boot wiring, configuration, Flyway migrations
-
-Ports are Java interfaces defined in `application/port/`; adapters implement them. The application core never imports from adapter or infrastructure packages.
-
+## Decisión
+Adoptar **Arquitectura hexagonal (puertos y adaptadores)** como patrón estructural para el servicio.
+Estructura:
+- `domain/` — modelo de dominio Java puro; sin dependencias del marco
+- `application/`: servicios de casos de uso e interfaces de puerto; sin JPA, sin HTTP, sin AWS
+- `adapter/in/` — adaptadores entrantes (REST controller, consumidores)
+- `adapter/out/`: adaptadores salientes (persistencia JPA, cliente HTTP del proveedor)
+- `infrastructure/` — Cableado Spring Boot, configuración, migraciones de Flyway
+Los puertos son interfaces Java definidas en `application/port/`; los adaptadores los implementan. El núcleo de la aplicación nunca importa desde paquetes de infraestructura o adaptadores.
 ---
-
-## Consequences
-
-**Positive:**
-- Domain and application layers are framework-agnostic and trivially unit-testable without a running Spring context.
-- Security-critical business logic (idempotency, validation, state machine) is isolated and auditable independently of HTTP or database concerns.
-- Adapters can be swapped (e.g., replace the HTTP provider client with a message queue consumer) without touching business rules.
-
-**Negative:**
-- Minor boilerplate overhead: every inbound call requires mapping from DTO → Command → Domain model → Entity and back.
-- Stricter package discipline must be enforced via ArchUnit tests or manual review to prevent dependency leaks.
-
+## Consecuencias
+**Positivo:**
+- Las capas de dominio y aplicación son independientes del marco y trivialmente comprobables por unidad sin un contexto Spring en ejecución.
+- La lógica empresarial crítica para la seguridad (idempotencia, validación, máquina de estado) está aislada y auditable independientemente de los problemas de HTTP o de la base de datos.
+- Los adaptadores se pueden intercambiar (por ejemplo, reemplazar el cliente proveedor HTTP con un consumidor de cola de mensajes) sin tocar las reglas comerciales.
+**Negativo:**
+- Gastos generales repetitivos menores: cada llamada entrante requiere un mapeo desde DTO → Comando → Modelo de dominio → Entidad y viceversa.
+- Se debe aplicar una disciplina de paquete más estricta mediante pruebas de ArchUnit o revisión manual para evitar fugas de dependencia.
 ---
-
-## Alternatives Considered
-
+## Alternativas consideradas
 | Alternative | Reason Rejected |
 |---|---|
 | **Layered (N-tier) architecture** | Business logic tends to leak into service or repository layers over time; harder to enforce isolation in a security-sensitive context |

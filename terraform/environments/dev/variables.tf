@@ -1,4 +1,9 @@
 variable "aws_region" { type = string }
+variable "cluster_admin_principal_arn" {
+  type        = string
+  description = "IAM principal that administers the development EKS cluster."
+  default     = "arn:aws:iam::911167887101:user/ervicperezdevpro"
+}
 variable "project" {
   type    = string
   default = "spin-transaction-orchestrator"
@@ -27,8 +32,15 @@ variable "workload_secret_arns" {
 variable "github_repository" {
   type        = string
   description = "GitHub owner/repository trusted to assume the deployment role."
-  default     = "ervicperezdev/spin-transaction-orchestrator"
+  default     = "ervicperezdev@55267476/spin-transaction-orchestrator@1360862265"
 }
+
+variable "repository_name" {
+  type        = string
+  description = "GitHub owner/repository trusted to assume the deployment role."
+  default     = "spin-transaction-orchestrator"
+}
+
 
 variable "github_ref" {
   type        = string
@@ -69,7 +81,7 @@ variable "application_service_account" {
 variable "allowed_control_plane_cidrs" {
   type = list(string)
   validation {
-    condition     = length(var.allowed_control_plane_cidrs) > 0 && !contains(var.allowed_control_plane_cidrs, "0.0.0.0/0")
+    condition     = length(var.allowed_control_plane_cidrs) > 0 && !contains(var.allowed_control_plane_cidrs, "0.0.0.0/1")
     error_message = "Provide approved, non-public control-plane CIDRs."
   }
 }

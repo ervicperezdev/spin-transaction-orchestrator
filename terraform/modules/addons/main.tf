@@ -4,6 +4,26 @@ variable "vpc_id" { type = string }
 variable "hosted_zone_arn" { type = string }
 variable "hosted_zone_name" { type = string }
 
+# Platform prerequisite for the application's SecretProviderClass. The AWS
+# chart bundles the CSI driver and its CRDs; manage both in this release.
+resource "helm_release" "secrets_provider_aws" {
+  name             = "secrets-provider-aws"
+  repository       = "https://aws.github.io/secrets-store-csi-driver-provider-aws"
+  chart            = "secrets-store-csi-driver-provider-aws"
+  version          = "3.1.3"
+  namespace        = "kube-system"
+  create_namespace = false
+  wait             = true
+  timeout          = 600
+
+  values = [yamlencode({
+    "secrets-store-csi-driver" = {
+      install    = true
+      syncSecret = { enabled = false }
+    }
+  })]
+}
+
 data "aws_iam_policy_document" "pod_identity_trust" {
   statement {
     effect  = "Allow"
@@ -92,6 +112,7 @@ resource "helm_release" "load_balancer_controller" {
   version          = "1.11.0"
   namespace        = "kube-system"
   create_namespace = false
+  upgrade_install  = true
   set = [
     { name = "clusterName", value = var.cluster_name },
     { name = "region", value = var.region },
@@ -144,6 +165,7 @@ resource "helm_release" "external_dns" {
   version          = "1.15.0"
   namespace        = "kube-system"
   create_namespace = false
+  upgrade_install  = true
   set = [
     { name = "provider.name", value = "aws" },
     { name = "sources[0]", value = "ingress" },
