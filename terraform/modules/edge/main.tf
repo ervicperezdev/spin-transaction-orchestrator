@@ -42,6 +42,8 @@ resource "aws_security_group_rule" "node_from_alb" {
 }
 
 data "aws_route53_zone" "this" {
+  # This module uses an existing public zone; it does not register a domain
+  # or create/delegate a hosted zone.
   name         = var.zone_name
   private_zone = false
 }
@@ -54,7 +56,8 @@ resource "aws_acm_certificate" "this" {
 
 resource "aws_route53_record" "certificate_validation" {
   for_each = {
-    for option in aws_acm_certificate.this.domain_validation_options : option.resource_record_name => option
+    # Domain names are known during planning; ACM record names are not.
+    for option in aws_acm_certificate.this.domain_validation_options : option.domain_name => option
   }
   zone_id         = data.aws_route53_zone.this.zone_id
   name            = each.value.resource_record_name

@@ -1,5 +1,6 @@
 locals {
-  name = "${var.project}-${var.environment}"
+  name         = "${var.project}-${var.environment}"
+  cluster_name = "${var.project}-cluster"
   tags = {
     Project     = var.project
     Environment = var.environment
@@ -37,15 +38,17 @@ module "addons" {
 
 module "ecr" {
   source          = "../../modules/ecr"
-  repository_name = var.project
+  repository_name = var.repository_name
 }
 
 module "eks" {
   source                      = "../../modules/eks"
-  cluster_name                = local.name
+  cluster_name                = local.cluster_name
   vpc_id                      = module.vpc.vpc_id
   subnet_ids                  = module.vpc.private_subnet_ids
   allowed_control_plane_cidrs = var.allowed_control_plane_cidrs
+  github_deploy_role_arn      = module.workload_iam.github_deploy_role_arn
+  cluster_admin_principal_arn = var.cluster_admin_principal_arn
 }
 
 module "rds" {

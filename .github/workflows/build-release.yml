@@ -201,11 +201,28 @@ jobs:
           audience: sts.amazonaws.com
 
       # ── EKS kubeconfig ────────────────────────────────────────────────────
+      - name: Verify AWS deployment identity and target cluster
+        env:
+          EKS_CLUSTER_NAME: ${{ vars.EKS_CLUSTER_NAME }}
+        run: |
+          aws sts get-caller-identity --query '{Account:Account,Arn:Arn}'
+          aws eks describe-cluster \
+            --name "$EKS_CLUSTER_NAME" \
+            --region "$AWS_REGION" \
+            --query 'cluster.{Arn:arn,Status:status,Access:accessConfig}'
+
       - name: Configure kubeconfig for EKS
         run: |
           aws eks update-kubeconfig \
             --name "${{ vars.EKS_CLUSTER_NAME }}" \
             --region "${{ vars.AWS_REGION }}"
+
+      - name: Verify Helm access to application namespace
+        run: |
+          if ! helm list --namespace transaction-api; then
+            echo '::error::Helm cannot access transaction-api. Compare the AWS identity and cluster above with the Terraform github_deploy access entry and its associated policy.'
+            exit 1
+          fi
 
       # ── Helm deployment ───────────────────────────────────────────────────
       #

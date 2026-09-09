@@ -92,6 +92,7 @@ resource "helm_release" "load_balancer_controller" {
   version          = "1.11.0"
   namespace        = "kube-system"
   create_namespace = false
+  upgrade_install  = true
   set = [
     { name = "clusterName", value = var.cluster_name },
     { name = "region", value = var.region },
@@ -144,6 +145,7 @@ resource "helm_release" "external_dns" {
   version          = "1.15.0"
   namespace        = "kube-system"
   create_namespace = false
+  upgrade_install  = true
   set = [
     { name = "provider.name", value = "aws" },
     { name = "sources[0]", value = "ingress" },
