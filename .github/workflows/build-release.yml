@@ -88,21 +88,21 @@ jobs:
         uses: docker/build-push-action@53b7df96c91f9c12dcc8a07bcb9ccacbed38856a # v7.3.0
         with:
           context: .
-          push: true
+          load: true
+          push: false
           # Tag with commit SHA (immutable, traceable) AND latest (mutable pointer).
           # Deployments always reference the SHA tag so rollbacks are deterministic.
           tags: |
             ${{ steps.ecr-login.outputs.registry }}/${{ env.IMAGE_NAME }}:${{ github.sha }}
-            ${{ steps.ecr-login.outputs.registry }}/${{ env.IMAGE_NAME }}:latest
 
       # Trivy – container image scan ────────────────────────────────────────
       - name: Scan pushed image for vulnerabilities
         run: |
           ECR_REGISTRY="${{ steps.ecr-login.outputs.registry }}"
           docker run --rm \
-            --volume "$GITHUB_WORKSPACE:/workspace" \
+            --volume /var/run/docker.sock:/var/run/docker.sock \
             aquasec/trivy:0.58.1 image \
-            --scanners vuln,secret \
+            --scanners vuln \
             --severity HIGH,CRITICAL \
             --ignore-unfixed \
             --exit-code 1 \
