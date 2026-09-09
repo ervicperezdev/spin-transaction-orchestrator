@@ -1,66 +1,64 @@
 # Spin Transaction Orchestrator
 
-MVP backend for transaction orchestration. It uses Java 21, Spring Boot, Maven and PostgreSQL.
+Backend MVP para la orquestación de transacciones. Usa Java 21, Spring Boot, Maven y PostgreSQL.
 
-## Documentation
+## Documentación
 
-- Architecture and decision records: `docs/architecture.md` and `docs/adr/`
-- Versioned OpenAPI source: `docs/openapi.yaml` (the running app exposes `/v3/api-docs`)
-- Security model and known risks: `docs/security.md`, `docs/threat-model.md` and `SECURITY.md`
-- Development EKS endpoint exception: [EXC-001](docs/security/EXC-001-eks-public-endpoint.md) records the proposed temporary public-access deviation for GitHub-hosted runners, its expiry, required evidence and rule-specific Semgrep annotation. It does not activate public access.
-- Signal catalog and operational boundary: `docs/observability.md`
-- Capacity assumptions, cost drivers and scaling decisions: `docs/finops-scalability.md`
-- CloudTrail, GuardDuty, Security Hub and WAF-log triage design: `docs/cloud-security-operations.md`
-- Compliance control mapping, repository evidence and operational gaps: `docs/compliance-mapping.md`
-- Current limitations, roadmap and AI-use statement: `docs/limitations-roadmap-ai.md`
+- Arquitectura y registros de decisiones: `docs/architecture.md` y `docs/adr/`
+- Fuente OpenAPI versionada: `docs/openapi.yaml` (la aplicación expone `/v3/api-docs`)
+- Modelo de seguridad y riesgos conocidos: `docs/security.md`, `docs/threat-model.md` y `SECURITY.md`
+- Catálogo de señales y límite operativo: `docs/observability.md`
+- Supuestos de capacidad, factores de costo y decisiones de escalabilidad: `docs/finops-scalability.md`
+- Diseño de triage para CloudTrail, GuardDuty, Security Hub y logs de AWS WAF: `docs/cloud-security-operations.md`
+- Mapeo de controles de cumplimiento, evidencia del repositorio y brechas operativas: `docs/compliance-mapping.md`
+- Limitaciones actuales, roadmap y declaración de uso de IA: `docs/limitations-roadmap-ai.md`
 
-## Prerequisites
+## Prerrequisitos
 
 - JDK 21
-- Docker with Docker Compose v2
+- Docker con Docker Compose v2
 
-## Run locally
+## Ejecución local
 
-Start PostgreSQL:
+Inicia PostgreSQL:
 
 ```bash
 docker compose up -d postgres
 ```
 
-Run the API:
+Ejecuta la API:
 
 ```bash
 ./mvnw spring-boot:run
 ```
 
-Verify the application and database connection:
+Verifica la aplicación y la conexión a la base de datos:
 
 ```bash
 curl http://localhost:8080/actuator/health
 ```
 
-Local operational and API documentation URLs:
+URLs locales de operación y documentación de API:
 
 - Health: `http://localhost:8080/actuator/health`
 - OpenAPI JSON: `http://localhost:8080/v3/api-docs`
 - Swagger UI: `http://localhost:8080/swagger-ui/index.html`
 
-Only the Actuator health and metrics endpoints are exposed. Health does not include
-component details; configuration endpoints such as `/actuator/env` remain unavailable.
+Solo se exponen los endpoints de health y metrics de Actuator. Health no incluye detalles de componentes; endpoints de configuración como `/actuator/env` no están disponibles.
 
-Stop the local database while preserving data:
+Detén la base de datos local preservando los datos:
 
 ```bash
 docker compose down
 ```
 
-To remove local database data too, run `docker compose down --volumes`.
+Para eliminar también los datos locales, ejecuta `docker compose down --volumes`.
 
-## Configuration
+## Configuración
 
-The local defaults are intentionally non-secret development values. Override them with environment variables when needed:
+Los valores locales predeterminados no contienen secretos y son solo para desarrollo. Sobrescríbelos con variables de entorno cuando sea necesario:
 
-| Variable | Default |
+| Variable | Valor predeterminado |
 | --- | --- |
 | `DB_URL` | `jdbc:postgresql://localhost:5432/transactions` |
 | `DB_USERNAME` | `transactions_app` |
@@ -70,65 +68,49 @@ The local defaults are intentionally non-secret development values. Override the
 | `PAYMENT_PROVIDER_CONNECT_TIMEOUT` | `2s` |
 | `PAYMENT_PROVIDER_READ_TIMEOUT` | `3s` |
 
-## Payment provider contract
+## Contrato del payment provider
 
-The outbound adapter sends `POST /payments` with `transactionId`, `type`, `amount`, and
-`currency`. It expects an `APPROVED` response containing `reference`, or a `REJECTED`
-response containing `rejectionReason`. HTTP 4xx/5xx responses, malformed responses, and
-network failures are translated to `PaymentProviderUnavailableException`; they never leak
-HTTP client types into the domain or application port.
+El outbound adapter envía `POST /payments` con `transactionId`, `type`, `amount` y `currency`. Espera una respuesta `APPROVED` con `reference`, o una respuesta `REJECTED` con `rejectionReason`. Las respuestas HTTP 4xx/5xx, respuestas malformadas y errores de red se traducen a `PaymentProviderUnavailableException`; los tipos del cliente HTTP no se filtran al domain ni al application port.
 
-Copy `.env.example` only for local convenience; `.env` is ignored and must never contain production credentials.
+Copia `.env.example` únicamente por comodidad local; `.env` se ignora y nunca debe contener credenciales de producción.
 
-## Package conventions
+## Convenciones de paquetes
 
-Code lives below `com.spin.transactionorchestrator`. Future features should keep transport, application use cases, domain logic and infrastructure adapters in separate packages. This keeps the MVP structure simple while leaving clear seams for the provider adapter and persistence work.
+El código está bajo `com.spin.transactionorchestrator`. Las funcionalidades futuras deben mantener transport, application use cases, domain logic e infrastructure adapters en paquetes separados. Esto mantiene simple la estructura del MVP y deja límites claros para el provider adapter y la persistencia.
 
-## Transaction validation errors
+## Errores de validación de transacciones
 
-Before calling a payment provider, the application validates transaction input with the
-following stable domain error codes: `INVALID_TRANSACTION_TYPE`, `INVALID_AMOUNT`,
-`UNSUPPORTED_CURRENCY`, and `DEBIT_AMOUNT_LIMIT_EXCEEDED`. The current transport adapter
-does not yet expose them over HTTP; it must map these codes without changing them when added.
+Antes de invocar un payment provider, la aplicación valida la entrada con estos códigos estables de domain error: `INVALID_TRANSACTION_TYPE`, `INVALID_AMOUNT`, `UNSUPPORTED_CURRENCY` y `DEBIT_AMOUNT_LIMIT_EXCEEDED`. El transport adapter actual todavía no los expone por HTTP; cuando se agregue, deberá mapearlos sin modificarlos.
 
-## List transactions
+## Listado de transacciones
 
-`GET /transactions` returns a paged response and never exposes persistence entities. It defaults to
-`page=0` and `size=20`; `page` is zero-based and `size` must be between 1 and 100. Optional
-`status` (`PENDING`, `APPROVED`, `REJECTED`) and `type` (`DEBIT`, `CREDIT`) filters can be combined.
-Results are ordered by `createdAt` descending and then `id` descending for deterministic pagination.
+`GET /transactions` devuelve una respuesta paginada y nunca expone entidades de persistencia. Sus valores predeterminados son `page=0` y `size=20`; `page` comienza en cero y `size` debe estar entre 1 y 100. Se pueden combinar los filtros opcionales `status` (`PENDING`, `APPROVED`, `REJECTED`) y `type` (`DEBIT`, `CREDIT`). Los resultados se ordenan por `createdAt` descendente y luego por `id` descendente para una paginación determinista.
 
 ```json
 {"items": [], "page": 0, "size": 20, "totalItems": 0, "totalPages": 0}
 ```
 
-Invalid paging or filter values return HTTP 400 with `code: "INVALID_QUERY_PARAMETER"`.
-The OpenAPI document describes request, success, pagination/filter, and error contracts;
-it is available at `/v3/api-docs`, with interactive documentation at `/swagger-ui/index.html`.
+Los valores inválidos de paginación o filtros devuelven HTTP 400 con `code: "INVALID_QUERY_PARAMETER"`. El documento OpenAPI describe los contratos de request, success, paginación/filtro y error; está disponible en `/v3/api-docs`, con documentación interactiva en `/swagger-ui/index.html`.
 
-## Build and test
+## Build y pruebas
 
 ```bash
 ./mvnw verify
 ```
 
-The project compiles with Java 21. No real financial data or credentials are required for local development.
+El proyecto compila con Java 21. El desarrollo local no requiere datos financieros reales ni credenciales.
 
-## Container image and smoke test
+## Imagen de contenedor y smoke test
 
-Build the production image from a clean checkout:
+Construye la imagen de producción desde un checkout limpio:
 
 ```bash
 docker build --tag spin-transaction-orchestrator:local .
 ```
 
-The build stage uses Maven with Java 21. The runtime stage is
-`gcr.io/distroless/java21-debian12:nonroot`, so it contains only the application
-and Java runtime; Maven and build tools are not shipped. The application runs as
-the image's unprivileged `nonroot` user.
+La etapa de build usa Maven con Java 21. La etapa de runtime es `gcr.io/distroless/java21-debian12:nonroot`, por lo que solo contiene la aplicación y el runtime de Java; Maven y las herramientas de build no se incluyen. La aplicación se ejecuta como el usuario sin privilegios `nonroot` de la imagen.
 
-Start the local database, then run the image with the database hostname set to
-the Compose service name:
+Inicia la base de datos local y ejecuta la imagen con el hostname de la base de datos configurado al nombre del servicio de Compose:
 
 ```bash
 docker compose up -d postgres
@@ -141,31 +123,22 @@ docker run --rm --name spin-transaction-orchestrator \
   spin-transaction-orchestrator:local
 ```
 
-In a second terminal, confirm the HTTP smoke test:
+En otra terminal, confirma el smoke test HTTP:
 
 ```bash
 curl --fail http://localhost:8080/actuator/health
 ```
 
-Stop the container with `docker stop spin-transaction-orchestrator`; use
-`docker compose down` to stop the local database.
+Detén el contenedor con `docker stop spin-transaction-orchestrator`; usa `docker compose down` para detener la base de datos local.
 
-## Container security checks
+## Controles de seguridad del contenedor
 
-The `Container security` GitHub Actions workflow runs for pull requests to
-`main` and for updates to `main`. It uses fixed tool image versions and has two
-independent gates:
+El workflow `Container security` de GitHub Actions se ejecuta para Pull Requests hacia `main` y para actualizaciones de `main`. Usa versiones fijas de imágenes de herramientas e incluye dos gates independientes:
 
-- **Hadolint** evaluates `Dockerfile` using `.hadolint.yaml`. The policy fails
-  on errors and currently has no ignored rules. A future exception must be
-  recorded in that file with its reason and reviewed in the corresponding PR.
-- **Trivy** builds the image locally in the runner, exports it to a temporary
-  tarball, and scans both OS/application vulnerabilities and embedded secrets.
-  It fails the job for any `HIGH` or `CRITICAL` finding, including unfixed
-  findings; the scan does not receive registry credentials, build secrets, or
-  application configuration.
+- **Hadolint** evalúa `Dockerfile` con `.hadolint.yaml`. La política falla ante errores y actualmente no ignora reglas. Toda excepción futura debe registrarse en ese archivo con su justificación y revisarse en el PR correspondiente.
+- **Trivy** construye la imagen localmente en el runner, la exporta a un tarball temporal y analiza vulnerabilidades de OS/aplicación y secretos embebidos. El job falla ante cualquier hallazgo `HIGH` o `CRITICAL`, incluidos los no corregidos; el escaneo no recibe credenciales de registry, build secrets ni configuración de la aplicación.
 
-Run the same checks from a clean checkout (Docker is required):
+Ejecuta los mismos controles desde un checkout limpio (requiere Docker):
 
 ```bash
 docker run --rm -i hadolint/hadolint:v2.12.0 < Dockerfile
@@ -182,15 +155,9 @@ docker run --rm \
 rm image.tar
 ```
 
-Do not suppress exploitable critical findings. If a finding needs temporary
-triage, capture its package, installed/fixed versions, reachability, owner and
-remediation date in the PR or issue; keep the failing gate until an approved
-exception is documented and time-bounded. Never pass secrets as Docker build
-arguments or commit them into the image.
+No suprimas hallazgos críticos explotables. Si un hallazgo requiere triage temporal, documenta en el PR o issue el paquete, versiones instalada/corregida, alcance, responsable y fecha de remediación; conserva el gate fallido hasta que exista una excepción aprobada y acotada en el tiempo. Nunca pases secretos como argumentos de Docker build ni los incluyas en la imagen.
 
-The `Container security` workflow also generates an SBOM (Software Bill of
-Materials) in SPDX-JSON format from the same image tarball using Syft and
-uploads it as a workflow artifact (`sbom-<sha>`). Run locally with:
+El workflow `Container security` también genera un SBOM (Software Bill of Materials) en formato SPDX-JSON a partir del mismo tarball usando Syft y lo publica como workflow artifact (`sbom-<sha>`). Para ejecutarlo localmente:
 
 ```bash
 docker build --tag spin-transaction-orchestrator:security .
@@ -203,14 +170,11 @@ docker run --rm \
 rm image.tar
 ```
 
-## Image signing and SBOM attestation (release)
+## Firma de imagen y attestación de SBOM (release)
 
-The `Release` GitHub Actions workflow triggers on version tags (`v*`). It
-builds and pushes to `ghcr.io`, then signs the image and attests the SBOM
-using Cosign with a keyless ephemeral OIDC identity issued by GitHub Actions.
-No private keys or tokens are stored in the repository or in the image.
+El workflow `Release` de GitHub Actions se activa con version tags (`v*`). Construye y publica en `ghcr.io`, después firma la imagen y genera la attestación del SBOM con Cosign usando una identidad OIDC efímera y keyless emitida por GitHub Actions. El repositorio y la imagen no almacenan private keys ni tokens.
 
-Verify a released image signature (requires `cosign` installed):
+Verifica la firma de una imagen publicada (requiere `cosign`):
 
 ```bash
 cosign verify \
@@ -220,7 +184,7 @@ cosign verify \
   ghcr.io/ervicperezdev/spin-transaction-orchestrator:<tag>
 ```
 
-Verify and extract the SBOM attestation:
+Verifica y extrae la attestación del SBOM:
 
 ```bash
 cosign verify-attestation \
@@ -232,6 +196,8 @@ cosign verify-attestation \
   | jq -r '.payload | @base64d | fromjson | .predicate'
 ```
 
-The SBOM corresponds to the digest of the published image. Admission-controller
-enforcement of signature and SBOM policies is a separate infrastructure
-evolution and is not implemented here.
+El SBOM corresponde al digest de la imagen publicada. La aplicación de políticas de firma y SBOM mediante un admission controller es una evolución de infraestructura independiente y no está implementada aquí.
+
+## Excepción temporal del endpoint EKS
+
+La integración conserva el endpoint público de desarrollo para los runners hospedados de GitHub. [EXC-001](docs/security/EXC-001-eks-public-endpoint.md) registra el alcance, los controles, la evidencia pendiente y el vencimiento del 23 de septiembre de 2026. La exclusión de Semgrep se limita a la regla y al recurso indicados; no equivale a verificar la configuración desplegada.

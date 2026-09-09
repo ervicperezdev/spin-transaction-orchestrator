@@ -1,20 +1,14 @@
-# Threat Model — Spin Transaction Orchestrator
-
-**Date:** 2026-09-08
-**Author:** Engineering & Security Lead
-**Methodology:** STRIDE
-
+# Modelo de amenazas: Spin Transaction Orchestrator
+**Fecha:** 2026-09-08
+**Autor:** Líder de ingeniería y seguridad
+**Metodología:** STRIDE
 ---
-
-> **Scope:** This is a design-time threat model. Entries describing WAF, ALB,
-> EKS, RDS, IRSA, Kyverno, CloudTrail or certificate pinning are target or
-> roadmap controls unless verified in a deployed environment; they are not a
-> claim that those services are active.
-
-## System Overview
-
-Text-based Data Flow Diagram:
-
+> **Alcance:** Este es un modelo de amenazas en tiempo de diseño. Entradas que describen WAF, ALB,
+> EKS, RDS, IRSA, Kyverno, CloudTrail o la fijación de certificados son objetivos o
+> controles de la hoja de ruta a menos que se verifiquen en un entorno implementado; no son un
+> afirmar que esos servicios están activos.
+## Descripción general del sistema
+Diagrama de flujo de datos basado en texto:
 ```
 [Internet Client]
        |
@@ -33,8 +27,7 @@ Text-based Data Flow Diagram:
   RDS private subnet
 ```
 
-**Trust boundaries:**
-
+**Límites de confianza:**
 | Boundary | Description |
 |---|---|
 | Internet / WAF | Untrusted external clients enter through AWS WAF; all traffic is filtered before reaching ALB |
@@ -43,9 +36,7 @@ Text-based Data Flow Diagram:
 | RDS private subnet | Isolated subnet not reachable from the internet; accessible only from within the cluster VPC |
 
 ---
-
-## Assets to Protect
-
+## Activos a proteger
 | Asset | Classification | Impact if Compromised |
 |---|---|---|
 | Transaction data (amounts, types, IDs) | Confidential | Financial fraud, regulatory violation |
@@ -57,20 +48,15 @@ Text-based Data Flow Diagram:
 | CI/CD secrets (GitHub OIDC, env vars) | Secret | Supply chain compromise |
 
 ---
-
-## STRIDE Analysis
-
-### S — Spoofing
-
+## Análisis STRIDE
+### S — Suplantación de identidad
 | Threat | Risk | Control | Residual Risk |
 |---|---|---|---|
 | Unauthenticated client submitting transactions | Medium | AWS WAF IP rules + (production) OAuth2/JWT authentication | Low after auth is enforced |
 | Provider impersonation via MITM on outbound HTTPS | Medium | TLS certificate verification on outbound calls + Certificate pinning roadmap | Low |
 
 ---
-
-### T — Tampering
-
+### T - Manipulación
 | Threat | Risk | Control | Residual Risk |
 |---|---|---|---|
 | Manipulating `amount`, `type`, or `accountId` in transit | High | TLS in transit + `@Valid` input validation + `BigDecimal` (NUMERIC precision) | Low |
@@ -78,18 +64,14 @@ Text-based Data Flow Diagram:
 | Malicious Flyway migration via supply chain compromise | High | Branch protection + mandatory PR review + Gitleaks in CI pre-push | Medium |
 
 ---
-
-### R — Repudiation
-
+### R — Repudio
 | Threat | Risk | Control | Residual Risk |
 |---|---|---|---|
 | Client denies submitting a transaction | Medium | Structured audit logs + `traceId` correlation + `Idempotency-Key` persistence | Low |
 | No cryptographic non-repudiation when auth is absent | Medium | AWS CloudTrail + application logs + future client authentication (JWT/mTLS) | Medium |
 
 ---
-
-### I — Information Disclosure
-
+### I — Divulgación de información
 | Threat | Risk | Control | Residual Risk |
 |---|---|---|---|
 | Financial data leaked in error responses | High | `GlobalExceptionHandler` returns opaque error codes; stack traces never exposed | Low |
@@ -97,9 +79,7 @@ Text-based Data Flow Diagram:
 | Container exposing internal build tools or binaries | Medium | Distroless base image (no shell, no package manager, no debug tools) | Low |
 
 ---
-
-### D — Denial of Service
-
+### D - Denegación de servicio
 | Threat | Risk | Control | Residual Risk |
 |---|---|---|---|
 | API flooding / volumetric DDoS | High | AWS WAF rate-limiting rules + ALB connection limits | Medium |
@@ -107,9 +87,7 @@ Text-based Data Flow Diagram:
 | DB connection pool exhaustion | Medium | HikariCP connection pool sizing + Kubernetes HPA for pod scaling | Medium |
 
 ---
-
-### E — Elevation of Privilege
-
+### E - Elevación de privilegios
 | Threat | Risk | Control | Residual Risk |
 |---|---|---|---|
 | Compromised pod → root access on node | High | `runAsNonRoot: true`, `readOnlyRootFilesystem: true`, `seccompProfile: RuntimeDefault` in Pod spec | Low |
@@ -117,9 +95,7 @@ Text-based Data Flow Diagram:
 | Stolen CI credentials enabling infrastructure changes | High | GitHub OIDC (no static AWS access keys) + branch protection + required reviews | Low |
 
 ---
-
-## Additional Fintech-Specific Scenarios
-
+## Escenarios adicionales específicos de Fintech
 | Scenario | Attack Vector | Control |
 |---|---|---|
 | Replay attack | Attacker captures and resends a valid HTTP request | `Idempotency-Key` stored with UNIQUE constraint; duplicate key returns cached result |
@@ -130,16 +106,7 @@ Text-based Data Flow Diagram:
 | Secret leakage via git history | Developer accidentally commits credentials | Gitleaks pre-push hook in CI + `.gitignore` for `.env` files + AWS Secrets Manager |
 
 ---
-
-## Risk Acceptance Matrix
-
-The proposed temporary public EKS management endpoint introduces an additional
-Internet-to-Kubernetes-API boundary outside the application's WAF/ALB path.
-Scanning, unauthorized authentication attempts and abuse of stolen authorized
-credentials are assessed in [EXC-001](security/EXC-001-eks-public-endpoint.md).
-Residual risk is High pending verification; this is a proposed development
-acceptance with expiry, not evidence of deployed controls or production approval.
-
+## Matriz de Aceptación de Riesgos
 | Threat | Likelihood | Impact | Risk Level | Control | Owner |
 |---|---|---|---|---|---|
 | API flooding / DDoS | High | High | Critical | WAF rate rules + ALB limits | Platform Engineer |
@@ -154,3 +121,7 @@ acceptance with expiry, not evidence of deployed controls or production approval
 | No non-repudiation without auth | High | Medium | Medium | Audit logs + future JWT | Security Lead |
 | Client spoofing (no auth in demo) | High | Medium | Medium | OAuth2/JWT (production roadmap) | Security Lead |
 | Malicious dependency | Low | High | Medium | Trivy SCA + SBOM + Cosign | Security Lead |
+
+## Exposición del API de administración EKS
+
+El endpoint público introduce una frontera Internet → API de Kubernetes fuera del recorrido WAF/ALB de la aplicación. [EXC-001](security/EXC-001-eks-public-endpoint.md) evalúa el reconocimiento externo, los intentos de autenticación, los ataques de disponibilidad y el abuso de credenciales autorizadas robadas. El riesgo residual se considera alto hasta verificar los controles; su aceptación temporal para desarrollo no acredita controles operativos ni autorización de producción.

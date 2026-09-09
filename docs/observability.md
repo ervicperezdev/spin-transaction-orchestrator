@@ -1,24 +1,18 @@
-# Observability signal catalog
-
-## Scope and safety boundary
-
-This repository instruments the transaction API and provisions some AWS metric
-sources through Terraform. It does **not** deploy a log shipper, OpenTelemetry
-collector, dashboards, or CloudWatch alarms. Those production integrations are
-P3 work and must be operated by the platform owner.
-
-The corresponding CloudTrail, GuardDuty, Security Hub and WAF-log detection
-strategy is documented in `docs/cloud-security-operations.md`. It is also a
-design only: no audit trail, finding aggregator, log destination or SOC routing
-is provisioned by this repository.
-
-Secrets Manager is the source of truth for credentials. Secret values mounted by
-the AWS Secrets Store CSI driver, payment-provider credentials, transaction IDs,
-idempotency keys, provider references, amounts, currencies, request/response
-bodies, and rejection reasons are prohibited from logs, metrics, and traces.
-
-## Application signals
-
+# Catálogo de señales de observabilidad
+## Alcance y límite de seguridad
+Este repositorio instrumenta la API de transacciones y proporciona algunas métricas de AWS.
+fuentes a través de Terraform. **No** implementa un transportista de registros, OpenTelemetry
+recopilador, paneles o alarmas de CloudWatch. Esas integraciones productivas son
+P3 funciona y debe ser operado por el propietario de la plataforma.
+La detección correspondiente de CloudTrail, GuardDuty, Security Hub y WAF-log
+La estrategia está documentada en `docs/cloud-security-operations.md`. También es un
+solo diseño: sin seguimiento de auditoría, agregador de búsqueda, destino de registro o enrutamiento SOC
+es proporcionado por este repositorio.
+Secrets Manager es la fuente de confianza para las credenciales. Valores secretos montados por
+el AWS Secrets Store CSI driver, las credenciales del proveedor de pagos, los ID de transacciones,
+claves de idempotencia, referencias de proveedores, importes, monedas, solicitud/respuesta
+Los cuerpos y los motivos de rechazo están prohibidos en registros, métricas y seguimientos.
+## Señales de aplicación
 | Signal | Type | Dimensions / fields | Purpose | Safety |
 | --- | --- | --- | --- | --- |
 | `payment.provider.requests` | Counter | `outcome`: `approved`, `rejected`, `http_error`, `unavailable`, `invalid_response` | Provider availability and business-result rate | No transaction or provider identifiers |
@@ -28,12 +22,10 @@ bodies, and rejection reasons are prohibited from logs, metrics, and traces.
 | `/actuator/health` | Health probe | Overall status only | ALB/Kubernetes liveness and readiness | Component details are disabled |
 | `/actuator/metrics` | Actuator metric discovery | Metric names and meter measurements | Restricted operational metric readout | `/actuator/env` and other sensitive endpoints remain unexposed |
 
-Console logs use Spring Boot's Logstash structured JSON format. The emitted
-`traceId` is a correlation identifier, not a distributed OpenTelemetry trace;
-OTel propagation/export is explicitly deferred to P3.
-
-## AWS and Kubernetes signals
-
+Los registros de la consola utilizan el formato JSON estructurado Logstash de Spring Boot. el emitido
+`traceId` es un identificador de correlación, no un seguimiento distribuido de OpenTelemetry;
+La propagación/exportación de OTel se difiere explícitamente a P3.
+## Señales de AWS y Kubernetes
 | Source | Signal family | Use | Ownership / status |
 | --- | --- | --- | --- |
 | Route 53 | DNS health checks and query/health-check metrics | Detect DNS resolution and endpoint-health issues | AWS source; collection/alarms are not created here |
@@ -42,14 +34,12 @@ OTel propagation/export is explicitly deferred to P3.
 | EKS | Control-plane, node, pod, deployment, and container resource signals | Detect cluster/workload health and saturation | EKS source; managed collection is out of repository scope |
 | RDS PostgreSQL | CPU, connections, storage, latency, failover events | Detect database capacity and availability risks | RDS source; alarms are not created here |
 
-The AWS Load Balancer Controller and ExternalDNS retain EKS Pod Identity. Any
-future telemetry integration must not broaden those roles or use application
-secrets as telemetry credentials.
-
-## Operator guidance
-
-Restrict Actuator access to the cluster/operations network; it is not a public
-API. Build dashboards and alerts from the catalog above with bounded labels only.
-At minimum, page on sustained provider unavailability, ALB unhealthy targets,
-RDS resource exhaustion, WAF block surges, and expiring ACM certificates. Tune
-thresholds from production baselines before enabling paging.
+AWS Load Balancer Controller y ExternalDNS conservan EKS Pod Identity. Cualquiera
+La futura integración de telemetría no debe ampliar esos roles ni utilizar aplicaciones.
+secretos como credenciales de telemetría.
+## Guía del operador
+Restringir el acceso del Actuator a la red de operaciones/clúster; no es publico
+API. Cree paneles y alertas a partir del catálogo anterior únicamente con etiquetas delimitadas.
+Como mínimo, página sobre indisponibilidad sostenida de proveedores, objetivos insalubres de ALB,
+Agotamiento de recursos RDS, aumentos repentinos de bloques WAF y certificados ACM que caducan. sintonizar
+umbrales desde las líneas base de producción antes de habilitar la paginación.

@@ -1,24 +1,19 @@
-# Cloud & Security Operations — diseño de señales y escalación
-
+# Operaciones de seguridad y nube — diseño de señales y escalada
 ## Propósito y límite
-
 Este documento define el diseño de detección y la respuesta SOC para el
 perímetro `Route 53 → WAF regional → ALB → AWS Load Balancer Controller →
 Service → pods`, RDS PostgreSQL, EKS Pod Identity y Secrets Manager. Es un
 artefacto de diseño: este repositorio **no habilita ni opera** CloudTrail,
-GuardDuty, Security Hub, destinos de logs, reglas de correlación, alarmas,
+GuardDuty, Security Hub, destinos de registros, reglas de cotización, alarmas,
 SNS/PagerDuty ni integraciones con SIEM.
-
 El propietario de la plataforma debe implementar los prerrequisitos en la
-cuenta AWS y validar permisos, retención, coste, región y rutas de escalación
+cuenta AWS y validar permisos, retención, coste, región y rutas de escalada
 antes de activar alertas. Los eventos y consultas no deben contener valores de
-secretos, bodies, importes, referencias de pago, IDs de transacción,
-idempotency keys ni datos personales. Para correlación se usa el identificador
+secretos, cuerpos, importaciones, referencias de pago, IDs de transacción,
+claves de idempotencia ni datos personales. Para activación se usa el identificador
 de incidente, el `eventID` de CloudTrail y el `traceId` UUID ya saneado de la
-aplicación, cuando aplique.
-
+aplicación, cuando se aplica.
 ## Fuentes y cobertura propuesta
-
 | Fuente | Cobertura requerida | Señales de triage | Conservación y acceso |
 | --- | --- | --- | --- |
 | CloudTrail (management events) | Todas las regiones; lectura/escritura de IAM, STS, EKS, RDS, Secrets Manager, WAFv2, Route 53 y CloudTrail | `AccessDenied`, cambios de IAM/roles/policies, `AssumeRole` inusual, cambios de logging, lectura anómala de secretos, cambios de ACL/reglas WAF, modificaciones RDS/EKS | Trail centralizado e inmutable con cifrado AWS-managed; acceso de sólo lectura para SOC y mínimo privilegio para administración. Retención conforme a política corporativa. |
@@ -29,23 +24,19 @@ aplicación, cuando aplique.
 | ALB, RDS, EKS y aplicación | Métricas/logs operativos existentes como contexto, no como fuente de auditoría de identidad | 5xx/targets unhealthy, presión de RDS, eventos de control plane/pods, `traceId` | Respetar el catálogo `docs/observability.md`; nunca elevar acceso a secretos para telemetría. |
 
 ### Dependencias de diseño
-
-- Centralizar CloudTrail y WAF logs en una cuenta/destino de logging aprobado,
+- Centralizar los registros de CloudTrail y WAF en una cuenta/destino de registro aprobado,
   con cifrado y protección contra borrado definidos por la organización.
 - Habilitar GuardDuty y Security Hub de forma organizacional y agregar los
   hallazgos de las cuentas/regiones que alojan la carga.
 - Autorizar explícitamente al rol de SOC a consultar evidencia, sin otorgarle
   permisos de modificación sobre producción de forma predeterminada.
 - Mantener Secrets Manager como fuente de verdad y Pod Identity para los
-  controladores EKS; no introducir ESO, Kubernetes Secrets ni claves AWS
+  controllers de EKS; no introducir ESO, Kubernetes Secrets ni claves AWS
   estáticas por motivos de observabilidad.
-
 ## Normalización y severidad
-
-La severidad se asigna por impacto confirmado y contexto; la severidad nativa
+La gravedad se asigna por impacto confirmada y contexto; la gravedad nativa
 de GuardDuty/Security Hub es una entrada, no una decisión final. El SOC abre
 un incidente y conserva enlaces a los hallazgos/eventos originales.
-
 | Prioridad | Criterio de escalación | Ejemplos | Objetivo inicial |
 | --- | --- | --- | --- |
 | P1 / crítica | Compromiso confirmado, exfiltración, modificación no autorizada de controles/identidad, o indisponibilidad/fraude activo de alto impacto | `GetSecretValue` no autorizado seguido de uso válido; rol admin creado; CloudTrail desactivado; GuardDuty de credencial comprometida; WAF evadido con impacto | Page inmediato a IC, Security Lead y Platform on-call; respuesta en 15 min. |
@@ -56,9 +47,7 @@ Un P2/P3 se eleva a P1 si aparece evidencia de acceso exitoso, cambio de
 permisos, extracción de datos, propagación a otra cuenta/región o impacto en
 transacciones/servicio. Un bloqueo WAF por sí solo no es evidencia de brecha;
 conservarlo como evidencia y evaluar volumen, regla, patrón y efecto en ALB.
-
-## Flujo de triage y escalación
-
+## Flujo de triaje y escalada
 ```text
 Fuente AWS/WAF → Security Hub o SIEM → SOC valida y deduplica
   → clasifica P1/P2/P3 + abre incidente
@@ -68,30 +57,28 @@ Fuente AWS/WAF → Security Hub o SIEM → SOC valida y deduplica
 ```
 
 1. **Validar (SOC):** confirmar cuenta, región, recurso, tiempo, actor y
-   evento original; deduplicar por `eventID`/finding ID. No copiar payloads
-   sensibles al ticket.
+   evento original; deduplicar por `eventID`/finding ID. No copiar cargas útiles
+   sensibles al billete.
 2. **Enriquecer:** correlacionar la identidad y ventana temporal con
    `AssumeRole`, cambios IAM, CloudTrail, WAF/ALB, actividad EKS, RDS y
-   accesos a Secrets Manager. Distinguir roles esperados de workload, Load
-   Balancer Controller y ExternalDNS de accesos anómalos.
+   accede a Secrets Manager. Distinguir roles esperados de carga de trabajo, Carga
+   AWS Load Balancer Controller y ExternalDNS de accesos anómalos.
 3. **Clasificar:** aplicar la tabla anterior y registrar hipótesis, alcance,
-   evidencia y dueño. Si hay datos de clientes o secretos potencialmente
-   expuestos, tratar como P1 hasta que Security Lead descarte impacto.
-4. **Escalar:** P1 pagea al Incident Commander, Security Lead y Platform
-   on-call; P2 notifica a Security Lead y Platform on-call; P3 queda en cola
-   SOC con dueño. Application/Database Engineering se suma sólo cuando el
+   evidencia y dueño. Si hay datos de clientes o secretos potenciales
+   expuestos, trate como P1 hasta que Security Lead descarte impacto.
+4. **Escalar:** P1 página al Comandante de Incidentes, Líder de Seguridad y Plataforma
+   de guardia; P2 notifica a Security Lead y Platform de guardia; P3 queda en cola
+   SOC con dueño. Ingeniería de aplicaciones/bases de datos se suma sólo cuando el
    recurso o impacto lo requiera.
-5. **Contener con autorización:** Platform puede aislar workloads, retirar
-   acceso, ajustar WAF o rotar secretos después de aprobación del Security
-   Lead/IC, salvo el procedimiento de emergencia corporativo. Preservar
+5. **Contener con autorización:** La plataforma puede aislar cargas de trabajo, retirar
+   acceso, ajustar WAF o rotar secretos después de la aprobación del Security
+   Lead/IC, salvo el procedimiento de emergencia corporativa. Preservar
    evidencia antes de cambios cuando sea seguro hacerlo.
 6. **Cerrar:** Security Lead valida la erradicación y el riesgo residual; el
    IC confirma recuperación. Security Hub se resuelve sólo con evidencia de
-   corrección. P1/P2 requiere postmortem, acciones con dueño/fecha y revisión
+   corrección. P1/P2 requiere post mortem, acciones con dueño/fecha y revisión
    de reglas de detección.
-
 ## Runbooks por señal
-
 | Disparador | Primeras comprobaciones | Contención candidata | Escalación |
 | --- | --- | --- | --- |
 | CloudTrail: IAM/STS inusual o `AccessDenied` repetido | actor, source IP, región, `AssumeRole`, cambios de policy y éxito posterior | revocar sesiones/credenciales, limitar policy o rol afectado | P2; P1 si hubo uso exitoso privilegiado o cambio no autorizado |
@@ -102,12 +89,11 @@ Fuente AWS/WAF → Security Hub o SIEM → SOC valida y deduplica
 | ALB/RDS/EKS con señal de seguridad | salud de targets, 5xx, conexiones RDS, eventos de control plane/pods | escalar/aislar/revertir cambio aprobado | P2; P1 si hay indisponibilidad amplia o evidencia de compromiso |
 
 ## Validación previa a operación
-
-Antes de declarar el diseño operativo, el propietario de plataforma debe hacer
-un ejercicio controlado que compruebe: llegada de un management event a la
+Antes de declarar el diseño operativo, el propietario de la plataforma debe hacer
+un ejercicio controlado que compruebe: llegada de un evento de gestión a la
 cuenta central; hallazgo de prueba de GuardDuty/Security Hub; entrega de un
 evento WAF con campos redactados; creación/deduplicación de un incidente;
-escalación P1/P2 a los on-calls correctos; y que SOC no pueda leer valores de
-secretos ni modificar producción fuera del flujo aprobado. Registrar los
+escalada P1/P2 a los turnos correctos; y que SOC no pueda leer valores de
+secretos ni modificar producción fuera del flujo aprobado. registrador los
 resultados, retención acordada y contactos reales en la documentación operada,
 no en este repositorio.

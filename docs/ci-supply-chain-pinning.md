@@ -1,8 +1,6 @@
-## CI supply-chain pinning
-
-GitHub Actions are pinned to immutable, 40-character commit IDs. The nearby
-comment retains the human-maintainable release tag.
-
+## Fijación de la cadena de suministro de CI
+Las GitHub Actions están ancladas a ID de confirmación inmutables de 40 caracteres. el cercano
+El comentario conserva la etiqueta de lanzamiento mantenible por humanos.
 | Dependency | Selected release | Verified immutable reference |
 | --- | --- | --- |
 | `actions/checkout` | `v7.0.1` | `3d3c42e5aac5ba805825da76410c181273ba90b1` |
@@ -22,21 +20,18 @@ comment retains the human-maintainable release tag.
 | `sigstore/cosign-installer` | `v4.1.2` | `6f9f17788090df1f26f669e9d70d6ae9567deba6` |
 | `returntocorp/semgrep` | `1.99.0` | Deliberately fixed image tag (manifest verified) |
 
-Verification was performed against the official upstreams:
-
+La verificación se realizó con respecto a las fuentes oficiales:
 ```sh
 git ls-remote --refs https://github.com/actions/checkout.git refs/tags/v7.0.1
 docker manifest inspect returntocorp/semgrep:1.99.0
 ```
 
-`semgrep --config=auto --error --quiet` runs without `continue-on-error`, and
-the Quality Gate fails if Semgrep (or either peer security control) does not
-return `success`. Dependabot retains its `github-actions` ecosystem entry so it
-can propose future Action pin updates; Maven, GitHub Actions, and Docker updates
-use a seven-day default cooldown.
+`semgrep --config=auto --error --quiet` se ejecuta sin `continue-on-error` y
+Quality Gate falla si Semgrep (o cualquiera de los controles de seguridad entre pares) no lo hace.
+devolver `success`. Dependabot conserva su entrada al ecosistema `github-actions` por lo que
+puede proponer futuras actualizaciones de pines de acción; Actualizaciones de Maven, GitHub Actions y Docker
+use un tiempo de reutilización predeterminado de siete días.
 
-The proposed development EKS endpoint risk acceptance is tracked in
-[EXC-001](security/EXC-001-eks-public-endpoint.md). It does not modify this gate.
-Any approved suppression must be limited to the identified rule/resource,
-reference that record and its expiry, and preserve blocking behavior for all
-other findings.
+## Exclusión puntual de Semgrep
+
+[EXC-001](security/EXC-001-eks-public-endpoint.md) registra la excepción del endpoint público EKS de desarrollo. La anotación `nosemgrep` afecta únicamente a ese recurso y a la regla identificada. Se conserva `--error` y el bloqueo de los demás hallazgos. La fecha de vencimiento requiere seguimiento manual; no se evalúa automáticamente en CI.

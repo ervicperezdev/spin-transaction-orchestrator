@@ -1,6 +1,11 @@
 variable "cluster_name" { type = string }
 variable "subnet_ids" { type = list(string) }
 variable "vpc_id" { type = string }
+variable "github_deploy_role_arn" { type = string }
+variable "cluster_admin_principal_arn" {
+  type        = string
+  description = "IAM principal allowed to administer the cluster and install platform addons."
+}
 variable "allowed_control_plane_cidrs" { type = list(string) }
 
 resource "aws_security_group" "node" {
@@ -101,11 +106,16 @@ resource "aws_eks_cluster" "this" {
   role_arn = aws_iam_role.cluster.arn
   version  = "1.31"
 
+  access_config {
+
+    authentication_mode = "API_AND_CONFIG_MAP"
+
+  }
   vpc_config {
     subnet_ids              = var.subnet_ids
     security_group_ids      = [aws_security_group.cluster.id]
     endpoint_private_access = true
-    endpoint_public_access  = false
+    endpoint_public_access  = true
     public_access_cidrs     = var.allowed_control_plane_cidrs
   }
 
@@ -113,6 +123,43 @@ resource "aws_eks_cluster" "this" {
   depends_on                = [aws_iam_role_policy_attachment.cluster]
 }
 
+resource "aws_eks_access_entry" "cluster_admin" {
+  cluster_name  = aws_eks_cluster.this.name
+  principal_arn = var.cluster_admin_principal_arn
+  type          = "STANDARD"
+}
+
+resource "aws_eks_access_policy_association" "cluster_admin" {
+  cluster_name  = aws_eks_access_entry.cluster_admin.cluster_name
+  principal_arn = aws_eks_access_entry.cluster_admin.principal_arn
+  policy_arn    = "arn:aws:eks::aws:cluster-access-policy/AmazonEKSClusterAdminPolicy"
+
+  access_scope {
+    type = "cluster"
+  }
+}
+
+resource "aws_eks_access_entry" "github_deploy" {
+  cluster_name  = aws_eks_cluster.this.name
+  principal_arn = var.github_deploy_role_arn
+  type          = "STANDARD"
+}
+
+resource "aws_eks_access_policy_association" "github_deploy" {
+  cluster_name  = aws_eks_cluster.this.name
+  principal_arn = var.github_deploy_role_arn
+
+  policy_arn = "arn:aws:eks::aws:cluster-access-policy/AmazonEKSClusterAdminPolicy"
+
+  access_scope {
+    type       = "namespace"
+    namespaces = ["transaction-api"]
+  }
+
+  depends_on = [
+    aws_eks_access_entry.github_deploy
+  ]
+}
 resource "aws_eks_node_group" "default" {
   cluster_name    = aws_eks_cluster.this.name
   node_group_name = "system"
@@ -135,5 +182,7 @@ resource "aws_eks_node_group" "default" {
 
 output "cluster_name" { value = aws_eks_cluster.this.name }
 output "cluster_arn" { value = aws_eks_cluster.this.arn }
+output "cluster_endpoint" { value = aws_eks_cluster.this.endpoint }
+output "cluster_ca_certificate" { value = aws_eks_cluster.this.certificate_authority[0].data }
 output "cluster_security_group_id" { value = aws_security_group.cluster.id }
 output "node_security_group_id" { value = aws_security_group.node.id }
