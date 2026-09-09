@@ -235,7 +235,6 @@ jobs:
             --set image.repository="${{ needs.build-and-push.outputs.ecr-image }}" \
             --set image.tag="${{ needs.build-and-push.outputs.image-tag }}" \
             --namespace transaction-api \
-            --create-namespace \
             --wait \
             --timeout 5m
 

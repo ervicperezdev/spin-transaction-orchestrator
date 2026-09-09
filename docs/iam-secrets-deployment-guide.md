@@ -1,4 +1,32 @@
 # Guía de implementación de IAM y secretos
+
+## Namespace de la aplicación
+
+Terraform crea `kubernetes_namespace_v1.application` con el nombre de
+`application_namespace` (por defecto, `transaction-api`). Debe aplicarse con
+la identidad administradora de plataforma antes de ejecutar el pipeline.
+Crear un namespace exige permisos de alcance de clúster; el rol GitHub tiene
+permisos dentro de `transaction-api` y el workflow ya no usa `--create-namespace`.
+El proveedor Kubernetes utiliza AWS CLI y tokens renovables, con la misma
+identidad y conectividad que el proveedor Helm.
+
+Después de inicializar Terraform y revisar el plan, aplique la configuración
+mediante el proceso de infraestructura y verifique como administrador:
+
+```bash
+kubectl get namespace transaction-api
+```
+
+Si el namespace ya existe fuera del estado, impórtelo antes de aplicar, desde
+`terraform/environments/dev`:
+
+```bash
+terraform import kubernetes_namespace_v1.application transaction-api
+```
+
+No incluya este recurso en el chart de la aplicación: eso volvería a exigir
+permisos de clúster al rol CI. Terraform administra su ciclo de vida; eliminar
+el namespace también elimina los recursos que contiene.
 Esta guía configura la identidad sin poner una credencial o un valor secreto en
 el repositorio. Asume la cuenta de AWS, el clúster de EKS y AWS Secrets Manager.
 El conductor/proveedor de CSI es propiedad de un operador de plataforma autorizado.
