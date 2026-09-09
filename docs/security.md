@@ -71,6 +71,11 @@ Threats to the build pipeline are treated with the same rigor as runtime threats
 
 The pipeline enforces a **fail-fast** policy: a high-severity Trivy finding or a Gitleaks detection blocks the merge.
 
+Scanner output is triaged as a finding, not automatically accepted as runtime
+risk. The context-aware priority, remediation SLA, exception and verification
+requirements are defined in
+[`vulnerability-risk-assessment.md`](security/vulnerability-risk-assessment.md).
+
 ---
 
 ## Secret Management
