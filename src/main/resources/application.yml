@@ -19,11 +19,12 @@ management:
   endpoints:
     web:
       exposure:
-        include: health,info
+        include: health
   endpoint:
     health:
       probes:
         enabled: true
+      show-details: never
 
 payment-provider:
   base-url: ${PAYMENT_PROVIDER_BASE_URL:http://localhost:9090}

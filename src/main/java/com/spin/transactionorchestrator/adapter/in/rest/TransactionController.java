@@ -20,6 +20,7 @@ import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
 import java.util.Currency;
 import org.springframework.validation.annotation.Validated;
+import org.springframework.http.MediaType;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.http.HttpStatus;
@@ -31,7 +32,7 @@ import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
 
 @RestController
-@RequestMapping("/transactions")
+@RequestMapping(value = "/transactions", produces = MediaType.APPLICATION_JSON_VALUE)
 @Tag(name = "Transactions")
 @Validated
 class TransactionController {
@@ -59,7 +60,7 @@ class TransactionController {
     @PostMapping
     @ResponseStatus(HttpStatus.CREATED)
     @Operation(summary = "Execute a transaction")
-    @ApiResponses({@ApiResponse(responseCode = "201", description = "Transaction processed"),
+    @ApiResponses({@ApiResponse(responseCode = "201", description = "Transaction processed", content = @Content(schema = @Schema(implementation = TransactionResponse.class))),
             @ApiResponse(responseCode = "400", description = "Malformed or invalid transaction request", content = @Content(schema = @Schema(implementation = ApiErrorResponse.class), examples = @ExampleObject(value = "{\"code\":\"INVALID_REQUEST\",\"message\":\"Request body is invalid\",\"violations\":[]}"))),
             @ApiResponse(responseCode = "404", description = "Requested resource not found", content = @Content(schema = @Schema(implementation = ApiErrorResponse.class), examples = @ExampleObject(value = "{\"code\":\"RESOURCE_NOT_FOUND\",\"message\":\"The requested resource was not found\",\"violations\":[]}"))),
             @ApiResponse(responseCode = "409", description = "Transaction state does not permit the operation", content = @Content(schema = @Schema(implementation = ApiErrorResponse.class), examples = @ExampleObject(value = "{\"code\":\"BUSINESS_RULE_VIOLATION\",\"message\":\"The transaction cannot be processed in its current state\",\"violations\":[]}"))),
@@ -67,6 +68,7 @@ class TransactionController {
             @ApiResponse(responseCode = "500", description = "Unexpected server failure", content = @Content(schema = @Schema(implementation = ApiErrorResponse.class), examples = @ExampleObject(value = "{\"code\":\"INTERNAL_ERROR\",\"message\":\"An unexpected error occurred\",\"violations\":[]}"))),
             @ApiResponse(responseCode = "503", description = "Payment provider unavailable", content = @Content(schema = @Schema(implementation = ApiErrorResponse.class), examples = @ExampleObject(value = "{\"code\":\"PAYMENT_PROVIDER_UNAVAILABLE\",\"message\":\"Payment processing is temporarily unavailable\",\"violations\":[]}")))})
     TransactionResponse create(@Valid @RequestBody CreateTransactionRequest request,
+            @Parameter(description = "Optional key used to safely retry a request", example = "checkout-4f5d9b")
             @RequestHeader(name = "Idempotency-Key", required = false) String idempotencyKey) {
         Transaction transaction = executeTransaction.execute(toCommand(request, idempotencyKey));
         return toResponse(transaction);
