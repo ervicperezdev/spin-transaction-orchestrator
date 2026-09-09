@@ -12,9 +12,10 @@ secundario de cada validación de pull request.
 2. Mantenga la rama con una vida ideal de uno o dos días y sincronícela con
    `main` con frecuencia. Divida trabajos grandes en PRs pequeños, revisables
    e integrables de forma independiente.
-3. Obtenga una aprobación, resuelva todas las conversaciones y espere el check
-   requerido antes de hacer merge. Un nuevo commit en el PR descarta las
-   aprobaciones previas; la revisión debe confirmar el nuevo `HEAD`.
+3. Resuelva todas las conversaciones y espere el check requerido antes de hacer
+   merge. Las revisiones de otras personas son recomendadas para cambios de
+   riesgo, pero no son obligatorias: el propietario puede integrar sus propios
+   PRs tras completar el gate.
 4. Integre con squash merge o merge commit según la convención acordada por el
    equipo, conservando un mensaje que explique el cambio. Evite mantener ramas
    de integración compartidas o divergentes.
@@ -51,10 +52,14 @@ trazable del artefacto.
 ### Regla de protección de `main`
 
 La protección se configura en GitHub, no en un archivo del repositorio. Su
-configuración verificable exige: PR, una aprobación, descarte de aprobaciones
-obsoletas, resolución de conversaciones, estado actualizado respecto de la
-rama base, bloqueo de force-push y bloqueo de eliminación. También se aplica a
-administradores para que no haya una ruta de bypass silenciosa.
+configuración verificable exige: PR, resolución de conversaciones, estado
+actualizado respecto de la rama base, bloqueo de force-push y bloqueo de
+eliminación. No se requiere aprobación externa: GitHub no permite que el autor
+apruebe su propio PR, por lo que exigir una aprobación bloquearía al
+propietario cuando trabaja solo. La invalidación de revisiones obsoletas se
+mantiene configurada para que una aprobación opcional no sobreviva a cambios
+del `HEAD`. La regla también se aplica a administradores para que no haya una
+ruta de bypass silenciosa.
 
 El único check requerido es **`Quality Gate`**, producido por
 [`PR Validation`](../.github/workflows/pr-validation.yml). Es un agregador que
@@ -77,6 +82,9 @@ no se ejecutan para todos los PR.
 
 La protección no sustituye una política de CODEOWNERS, ambientes con
 aprobaciones, verificación de firmas en el clúster ni gestión de incidentes.
+La ausencia de una aprobación obligatoria es una concesión explícita para un
+repositorio de propietario único; se debe restablecer al menos una aprobación
+externa al incorporar colaboradores con capacidad de revisión.
 Los workflows de publicación/despliegue se mantienen fuera del merge gate
 porque dependen de AWS/ECR/EKS y sólo se ejecutan tras `push` a `main`.
 Cualquier cambio a la regla, al nombre del check requerido o a sus triggers
