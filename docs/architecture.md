@@ -25,6 +25,11 @@ key, call the configured provider, transition the transaction to `APPROVED` or
 
 ## Deployment intent vs. present evidence
 
+The intended internet edge is Route 53 → WAF-protected ALB (HTTPS terminated
+with ACM) → AWS Load Balancer Controller → Kubernetes Service → pods. The
+controller and ExternalDNS use EKS Pod Identity; details are in
+`docs/edge-architecture.md`.
+
 The repository contains Helm templates, Kyverno policies, Terraform and GitHub
 Actions workflow definitions. They are deployable artifacts, not evidence that
 an AWS account, EKS cluster, WAF, RDS instance, monitoring stack or admission

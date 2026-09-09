@@ -13,7 +13,24 @@ module "vpc" {
   vpc_cidr              = var.vpc_cidr
   availability_zones    = var.availability_zones
   private_subnet_cidrs  = var.private_subnet_cidrs
+  public_subnet_cidrs   = var.public_subnet_cidrs
   database_subnet_cidrs = var.database_subnet_cidrs
+}
+
+module "edge" {
+  source    = "../../modules/edge"
+  name      = local.name
+  zone_name = var.route53_zone_name
+  hostname  = var.application_hostname
+}
+
+module "addons" {
+  source           = "../../modules/addons"
+  cluster_name     = module.eks.cluster_name
+  region           = var.aws_region
+  vpc_id           = module.vpc.vpc_id
+  hosted_zone_arn  = "arn:aws:route53:::hostedzone/${module.edge.zone_id}"
+  hosted_zone_name = var.route53_zone_name
 }
 
 module "ecr" {

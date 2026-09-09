@@ -10,7 +10,10 @@ variable "environment" {
 variable "vpc_cidr" { type = string }
 variable "availability_zones" { type = list(string) }
 variable "private_subnet_cidrs" { type = list(string) }
+variable "public_subnet_cidrs" { type = list(string) }
 variable "database_subnet_cidrs" { type = list(string) }
+variable "route53_zone_name" { type = string }
+variable "application_hostname" { type = string }
 variable "workload_secret_arns" {
   type    = set(string)
   default = []
