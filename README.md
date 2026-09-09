@@ -234,3 +234,4 @@ cosign verify-attestation \
 The SBOM corresponds to the digest of the published image. Admission-controller
 enforcement of signature and SBOM policies is a separate infrastructure
 evolution and is not implemented here.
+
