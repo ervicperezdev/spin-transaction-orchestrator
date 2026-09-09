@@ -55,6 +55,13 @@ resource "aws_security_group_rule" "node_from_cluster_kubelet" {
 resource "aws_launch_template" "node" {
   name_prefix            = "${var.cluster_name}-node-"
   vpc_security_group_ids = [aws_security_group.node.id]
+  metadata_options {
+    http_endpoint               = "enabled"
+    http_tokens                 = "required"
+    http_put_response_hop_limit = 2
+    instance_metadata_tags      = "disabled"
+  }
+
   lifecycle { create_before_destroy = true }
 }
 
