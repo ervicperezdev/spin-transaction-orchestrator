@@ -1,16 +1,12 @@
-# IAM and Secrets deployment guide
-
-This guide configures identity without putting a credential or secret value in
-the repository. It assumes the AWS account, EKS cluster and AWS Secrets Store
-CSI driver/provider are owned by an authorized platform operator.
-
-## 1. Bootstrap reviewed inputs
-
-Create the EKS IAM OIDC provider once for the cluster issuer, then set its ARN
-and issuer host/path in a private `terraform.tfvars`. Do not commit that file.
-Use an exact, versioned Secrets Manager ARN in `workload_secret_arns`; do not
-use `*`. Create the secret value with an approved secret-management process.
-
+# Guía de implementación de IAM y secretos
+Esta guía configura la identidad sin poner una credencial o un valor secreto en
+el repositorio. Asume la cuenta de AWS, el clúster de EKS y AWS Secrets Manager.
+El conductor/proveedor de CSI es propiedad de un operador de plataforma autorizado.
+## 1. Entradas revisadas por Bootstrap
+Cree el proveedor EKS IAM OIDC una vez para el emisor del clúster y luego configure su ARN.
+y host/ruta del emisor en un `terraform.tfvars` privado. No confirme ese archivo.
+Utilice un ARN de Secrets Manager exacto y versionado en `workload_secret_arns`; no
+Utilice `*`. Cree el valor secreto con un proceso de gestión de secretos aprobado.
 ```hcl
 workload_secret_arns = [
   "arn:aws:secretsmanager:us-east-1:123456789012:secret:spin/transaction-api/prod-ABC123",
@@ -19,48 +15,39 @@ eks_oidc_provider_arn    = "arn:aws:iam::123456789012:oidc-provider/oidc.eks.us-
 eks_oidc_issuer_hostpath = "oidc.eks.us-east-1.amazonaws.com/id/EXAMPLE"
 ```
 
-Run `terraform plan` for review, then apply only through the approved
-infrastructure change process. Terraform deliberately never sets a secret
-value.
-
-## 2. Bind the transaction API and mount Secrets Manager directly
-
-Annotate the transaction API service account with `workload_role_arn`:
-
+Ejecute `terraform plan` para revisión, luego aplique solo a través del programa aprobado.
+proceso de cambio de infraestructura. Terraform deliberadamente nunca guarda un secreto
+valor.
+## 2. Vincule la API de transacciones y monte Secrets Manager directamente
+Anote la cuenta del servicio API de transacciones con `workload_role_arn`:
 ```yaml
 eks.amazonaws.com/role-arn: arn:aws:iam::<account-id>:role/<environment>-transaction-api
 ```
 
-The namespace and service-account name must match `application_namespace` and
-`application_service_account`. Set the Helm `serviceAccount.roleArn`,
-`secretsManager.region`, and `secretsManager.secretArn` values. The chart
-creates a `SecretProviderClass` that mounts the approved JSON fields as
-read-only files; Spring Boot imports them through `configtree`. It does not
-create a Kubernetes `Secret`.
-
-Secrets Manager should use its AWS-managed key (`alias/aws/secretsmanager`),
-and RDS uses its AWS-managed RDS key. No customer-managed KMS key is created.
-
-## 3. Configure CI federation
-
-Set the Terraform output `github_deploy_role_arn` as the protected GitHub
-repository secret `AWS_DEPLOY_ROLE_ARN`, and set `AWS_REGION` as a repository
-variable. The existing workflow uses `id-token: write` and exchanges GitHub's
-short-lived token directly with STS. It is restricted to the configured
-repository and `refs/heads/main`.
-
-Before enabling deployment, grant this deploy role only the EKS access entry
-and Kubernetes RBAC permissions required for its target namespace. Verify the
-role has no IAM write, Secrets Manager, wildcard ECR repository, or
-`sts:AssumeRole` permissions.
-
-## Verification checklist
-
-- `terraform fmt -check -recursive terraform` and `terraform validate` pass.
-- The GitHub role trust contains both exact `aud` and `sub` conditions.
-- The API IRSA trust contains exact EKS issuer, namespace and service-account
-  conditions.
-- `workload_secret_arns` contains only the intended secret ARNs.
-- Repository and organization secrets contain no static AWS access key pair.
-- `helm template transaction-api helm/transaction-api` renders the
-  `SecretProviderClass` and CSI volume without revealing a value.
+El espacio de nombres y el nombre de la cuenta de servicio deben coincidir con `application_namespace` y
+`application_service_account`. Configure el timón `serviceAccount.roleArn`,
+Valores `secretsManager.region` y `secretsManager.secretArn`. el cuadro
+crea un `SecretProviderClass` que monta los campos JSON aprobados como
+archivos de sólo lectura; Spring Boot los importa a través de `configtree`. no lo hace
+cree un Kubernetes `Secret`.
+Secrets Manager debe utilizar su clave administrada por AWS (`alias/aws/secretsmanager`),
+y RDS utiliza su clave RDS administrada por AWS. No se crea ninguna clave KMS administrada por el cliente.
+## 3. Configurar la federación de CI
+Configure la salida de Terraform `github_deploy_role_arn` como GitHub protegido
+secreto del repositorio `AWS_DEPLOY_ROLE_ARN` y configure `AWS_REGION` como repositorio
+variable. El flujo de trabajo existente utiliza `id-token: write` e intercambia GitHub.
+token de corta duración directamente con STS. Está restringido a lo configurado.
+repositorio y `refs/heads/main`.
+Antes de habilitar la implementación, otorgue a esta función de implementación solo la entrada de acceso EKS
+y permisos RBAC de Kubernetes necesarios para su espacio de nombres de destino. Verificar el
+El rol no tiene escritura de IAM, Secrets Manager, repositorio ECR comodín ni
+Permisos `sts:AssumeRole`.
+## Lista de verificación de verificación
+- Pase `terraform fmt -check -recursive terraform` y `terraform validate`.
+- La confianza del rol de GitHub contiene condiciones exactas de `aud` y `sub`.
+- La confianza API IRSA contiene el emisor, el espacio de nombres y la cuenta de servicio exactos de EKS.
+  condiciones.
+- `workload_secret_arns` contiene solo los ARN secretos previstos.
+- Los secretos del repositorio y de la organización no contienen ningún par de claves de acceso estáticas de AWS.
+- `helm template transaction-api helm/transaction-api` representa el
+  `SecretProviderClass` y volumen CSI sin revelar un valor.

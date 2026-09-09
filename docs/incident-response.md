@@ -1,12 +1,8 @@
-# Incident Response Playbook — Spin Transaction Orchestrator
-
-**Date:** 2026-09-08
-**Scope:** Security and operational incidents for the transaction API running on EKS with RDS PostgreSQL
-
+# Guía de respuesta a incidentes: Spin Transaction Orchestrator
+**Fecha:** 2026-09-08
+**Alcance:** Incidentes operativos y de seguridad para la API de transacciones que se ejecuta en EKS con RDS PostgreSQL
 ---
-
-## Response Process
-
+## Proceso de respuesta
 ```
 Detect → Triage → Contain → Eradicate → Recover → Lessons Learned
 ```
@@ -21,9 +17,7 @@ Detect → Triage → Contain → Eradicate → Recover → Lessons Learned
 | **Lessons Learned** | Prevent recurrence | Postmortem document, action items, runbook updates |
 
 ---
-
-## Severity Levels
-
+## Niveles de gravedad
 | Severity | Label | Definition | Examples |
 |---|---|---|---|
 | P1 | Critical | Active data breach, system fully down, financial fraud in progress | RDS data exfiltration, all pods crash-looping, credentials confirmed stolen |
@@ -31,9 +25,7 @@ Detect → Triage → Contain → Eradicate → Recover → Lessons Learned
 | P3 | Medium | Non-critical anomaly, low-impact issue, informational alert | Unusual but non-malicious traffic pattern, dependency vulnerability with no exploit |
 
 ---
-
-## Roles and Responsibilities
-
+## Funciones y responsabilidades
 | Role | Responsibilities |
 |---|---|
 | **Incident Commander** | Coordinates overall response, drives the timeline, communicates status to stakeholders, declares incident closed |
@@ -44,9 +36,7 @@ Detect → Triage → Contain → Eradicate → Recover → Lessons Learned
 | **Communications** | Stakeholder and customer notification when required by severity or regulation; manages external comms |
 
 ---
-
-## SLA Targets
-
+## Objetivos de SLA
 | Severity | Detection → Response | Resolution Target |
 |---|---|---|
 | P1 | < 15 minutes | < 4 hours |
@@ -54,96 +44,72 @@ Detect → Triage → Contain → Eradicate → Recover → Lessons Learned
 | P3 | < 4 hours | < 1 week |
 
 ---
-
-## Incident Playbook: Abnormal Transaction Volume
-
-**Trigger:** AWS WAF blocking surge detected OR `transaction_rejected_total` metric spike in CloudWatch Alarms.
-
-### 1. Detection
-- CloudWatch Alarm fires on `transaction_rejected_total` exceeding threshold.
-- WAF dashboard shows block count spike on the rate-limiting rule.
-- On-call Platform Engineer receives PagerDuty/SNS alert.
-
-### 2. Triage (Security Lead)
-- Pull WAF blocked-request sample: examine source IPs, User-Agent patterns, request paths.
-- Check EKS pod logs for request patterns: distributed IPs → DDoS; single account pattern → fraud attempt; uniform valid traffic → potential bug in rate rule.
-- Assign P1 (active fraud/DDoS impacting availability) or P2 (elevated but not critical).
-
-### 3. Containment
-| Option | When to Use |
+## Guía de incidentes: volumen de transacciones anormales
+**Activador:** Se detectó un aumento de bloqueo de AWS WAF O un aumento de la métrica `transaction_rejected_total` en las alarmas de CloudWatch.
+### 1. Detección
+- La alarma de CloudWatch se activa cuando `transaction_rejected_total` supera el umbral.
+- El panel WAF muestra un aumento en el recuento de bloques en la regla de limitación de velocidad.
+- El ingeniero de plataforma de guardia recibe una alerta de PagerDuty/SNS.
+### 2. Triaje (líder de seguridad)
+- Extraiga una muestra de solicitud bloqueada de WAF: examine las IP de origen, los patrones de agente de usuario y las rutas de solicitud.
+- Verifique los registros del pod de EKS para conocer los patrones de solicitud: IP distribuidas → DDoS; patrón de cuenta única → intento de fraude; Tráfico válido uniforme → posible error en la regla de tarifas.
+- Asignar P1 (fraude activo/DDoS que afecta la disponibilidad) o P2 (elevado pero no crítico).
+### 3. Contención| Option | When to Use |
 |---|---|
 | Escalate WAF rate rule threshold | Volumetric DDoS confirmed |
 | Temporarily scale down replicas + enable maintenance page | System instability; need to drain cleanly |
 | Manually trip Resilience4j circuit breaker via actuator | Provider being overwhelmed by retries |
 | Block specific IP ranges in WAF | Identified attack source |
 
-### 4. Investigation
-- **CloudTrail:** Review API Gateway / ALB access logs for unusual call patterns.
-- **EKS pod logs:** `kubectl logs -l app=transaction-api --since=30m` — look for repeated `accountId`, unusual `amount` values, idempotency key reuse.
-- **RDS:** Check for unusual write volume or locked rows in `transactions` table.
-- **Application Engineer:** Verify idempotency guard is functioning; check for any recent deploy that changed rate-sensitive logic.
-
-### 5. Eradication
-- Block confirmed attacker IPs/CIDRs permanently in WAF Managed Rules.
-- If a bug caused the spike, deploy hotfix via normal PR → CI → rolling update.
-- If fraud: freeze affected `accountId`s pending manual review.
-
-### 6. Recovery
-- Verify pod health: all replicas `Running`, readiness probes passing.
-- Confirm circuit breaker is `CLOSED` (healthy state) before re-enabling full traffic.
-- Adjust WAF rate rule to reflect confirmed traffic baseline.
-- Monitor `transaction_success_total` and `transaction_rejected_total` for 30 min post-recovery.
-
-### 7. Postmortem
-- Document: timeline, affected accounts, transaction count, financial impact estimate.
-- Decision log: why each containment action was taken and by whom.
-- Action items: rule tuning, monitoring improvements, runbook updates.
-- Owner assigned for each action item with due date.
-
+### 4. Investigación
+- **CloudTrail:** Revise los registros de acceso de API Gateway/ALB para detectar patrones de llamadas inusuales.
+- **Registros del pod de EKS:** `kubectl logs -l app=transaction-api --since=30m`: busca `accountId` repetidos, valores inusuales de `amount` y reutilización de claves de idempotencia.
+- **RDS:** Compruebe si hay un volumen de escritura inusual o filas bloqueadas en la tabla `transactions`.
+- **Ingeniero de aplicaciones:** Verifique que la protección de idempotencia esté funcionando; verifique si hay alguna implementación reciente que haya cambiado la lógica sensible a la velocidad.
+### 5. Erradicación
+- Bloquear IP/CIDR de atacantes confirmados de forma permanente en las reglas administradas de WAF.
+- Si un error provocó el pico, implemente la revisión mediante PR → CI → actualización continua normal.
+- En caso de fraude: congelar los `accountId` afectados en espera de revisión manual.
+### 6. Recuperación
+- Verificar el estado del pod: todas las réplicas `Running`, sondas de preparación aprobadas.
+- Confirme que el disyuntor esté en `CLOSED` (estado saludable) antes de volver a habilitar el tráfico total.
+- Ajustar la regla de tarifas WAF para reflejar la línea base de tráfico confirmado.
+- Monitoree `transaction_success_total` y `transaction_rejected_total` durante 30 minutos después de la recuperación.
+### 7. Post mortem
+- Documento: cronograma, cuentas afectadas, recuento de transacciones, estimación de impacto financiero.
+- Registro de decisiones: por qué se tomó cada acción de contención y por quién.
+- Elementos de acción: ajuste de reglas, mejoras de monitoreo, actualizaciones de runbook.
+- Propietario asignado para cada elemento de acción con fecha de vencimiento.
 ---
-
-## Incident Playbook: Suspected Secret Leakage
-
-**Trigger:** Gitleaks CI scan alert OR developer reports accidental credential commit OR anomalous CloudTrail API activity.
-
-### Steps
-
-1. **Detect:** Gitleaks fails the CI pipeline on the affected branch, or a developer notices a `.env` or credentials file in a commit.
-
-2. **Immediate revocation (Security Lead + Platform Engineer):**
-   - Identify the exact secret type (AWS key, DB password, provider API key).
-   - Revoke immediately via the issuing system (AWS IAM console, provider dashboard, RDS password reset) — do NOT wait for root cause analysis.
-
-3. **Rotate in AWS Secrets Manager:**
-   - Update the affected secret in AWS Secrets Manager.
-   - Verify the rotated version is readable from Secrets Manager by the API IRSA role.
-   - Perform rolling restart of affected pods to remount and reload credentials.
-
-4. **Audit CloudTrail:**
-   - Search for API calls using the revoked credential in the window from commit time to revocation.
-   - Look for: unauthorized resource creation, data reads/exports, IAM role assumption.
-   - If unauthorized calls found → escalate to P1 data breach protocol.
-
-5. **Remove from git history:**
-   - Use `git filter-repo` or BFG Repo Cleaner to purge secret from all commits.
-   - Force-push cleaned history (requires repository admin; coordinate with team).
-   - Invalidate all local developer clones (require re-clone).
-
-6. **Eradication:**
-   - Add pattern to `.gitignore` and update pre-commit Gitleaks config to detect similar patterns.
-   - Review PR that introduced the leak for other sensitive data.
-
-7. **Lessons Learned:**
-   - Add the leaked pattern to Gitleaks custom rules.
-   - Conduct brief team awareness session on secret hygiene.
-   - Verify all `.env*` files are in `.gitignore`.
-
+## Guía de incidentes: sospecha de filtración secreta
+**Desencadenante:** Alerta de escaneo de CI de Gitleaks O el desarrollador informa una confirmación accidental de credenciales O actividad anómala de la API de CloudTrail.
+### Pasos
+1. **Detección:** Gitleaks falla en la canalización de CI en la rama afectada, o un desarrollador detecta un archivo `.env` o de credenciales en una confirmación.
+2. **Revocación inmediata (Líder de seguridad + Ingeniero de plataforma):**
+   - Identifique el tipo de secreto exacto (clave AWS, contraseña de base de datos, clave API del proveedor).
+   - Revocar inmediatamente a través del sistema emisor (consola de AWS IAM, panel del proveedor, restablecimiento de contraseña de RDS); NO espere el análisis de la causa raíz.
+3. **Girar en AWS Secrets Manager:**
+   - Actualice el secreto afectado en AWS Secrets Manager.
+   - Verifique que la versión rotada sea legible desde Secrets Manager mediante la función API IRSA.
+   - Realice un reinicio continuo de los pods afectados para volver a montar y recargar las credenciales.
+4. **Auditar CloudTrail:**
+   - Busque llamadas API utilizando la credencial revocada en la ventana desde el momento de la confirmación hasta la revocación.
+   - Busque: creación de recursos no autorizados, lecturas/exportaciones de datos, asunción de roles de IAM.
+   - Si se encuentran llamadas no autorizadas → escalar al protocolo de violación de datos P1.
+5. **Eliminar del historial de git:**
+   - Utilice `git filter-repo` o BFG Repo Cleaner para eliminar el secreto de todas las confirmaciones.
+   - Forzar el historial de limpieza (requiere administrador del repositorio; coordinar con el equipo).
+   - Invalidar todos los clones de desarrolladores locales (es necesario volver a clonarlos).
+6. **Erradicación:**
+   - Agregue un patrón a `.gitignore` y actualice la configuración de Gitleaks previa a la confirmación para detectar patrones similares.
+   - Revisar las relaciones públicas que introdujeron la filtración en busca de otros datos confidenciales.
+7. **Lecciones aprendidas:**
+   - Agregue el patrón filtrado a las reglas personalizadas de Gitleaks.
+   - Realizar una breve sesión de concientización del equipo sobre higiene secreta.
+   - Verifique que todos los archivos `.env*` estén en `.gitignore`.
 ---
-
-## Communication Templates
-
-### P1 — Internal Status Update (every 30 min)
-```
+## Plantillas de comunicación
+### P1 — Actualización de estado interno (cada 30 min)```
 [INCIDENT-P1] Spin Transaction API — <short description>
 Status: Contained / Investigating / Recovering
 Impact: <number of transactions affected / systems down>
@@ -153,8 +119,7 @@ ETA to resolution: <estimate or TBD>
 IC: <name>
 ```
 
-### P1 — Customer-Facing Notification (if applicable)
-```
+### P1: Notificación de cara al cliente (si corresponde)```
 We are currently experiencing an issue affecting transaction processing.
 Our team is actively investigating. We will provide an update within 30 minutes.
 Transactions submitted during this window will be reconciled; no duplicate charges will occur.

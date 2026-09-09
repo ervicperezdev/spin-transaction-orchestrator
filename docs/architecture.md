@@ -1,10 +1,7 @@
-# Architecture
-
-## Current implementation
-
-The service is a Java 21 / Spring Boot REST API with PostgreSQL persistence.
-It follows a ports-and-adapters structure:
-
+# Arquitectura
+## Implementación actual
+El servicio es una API REST Java 21/Spring Boot con persistencia PostgreSQL.
+Sigue una estructura de puertos y adaptadores:
 ```text
 HTTP REST controller -> application use cases -> domain model
                                   |                    |
@@ -13,40 +10,32 @@ HTTP REST controller -> application use cases -> domain model
                     JPA/PostgreSQL and HTTP provider adapters
 ```
 
-- `domain`: transaction state and validation rules, without framework imports.
-- `application`: commands, queries, use cases and inbound/outbound ports.
-- `adapter/in/rest`: request mapping, validation, error mapping and OpenAPI annotations.
-- `infrastructure`: Spring wiring, JPA/Flyway persistence and the HTTP payment-provider adapter.
-
-The synchronous write path is: validate request, look up an optional idempotency
-key, call the configured provider, transition the transaction to `APPROVED` or
-`REJECTED`, then persist it. `GET /transactions` reads a deterministic page
-(created time descending, then id descending).
-
-## Deployment intent vs. present evidence
-
-The intended internet edge is Route 53 → WAF-protected ALB (HTTPS terminated
-with ACM) → AWS Load Balancer Controller → Kubernetes Service → pods. The
-controller and ExternalDNS use EKS Pod Identity; details are in
+- `domain`: estado de transacción y reglas de validación, sin importaciones de framework.
+- `application`: comandos, consultas, casos de uso y puertos de entrada/salida.
+- `adapter/in/rest`: mapeo de solicitudes, validación, mapeo de errores y anotaciones OpenAPI.
+- `infrastructure`: cableado Spring, persistencia JPA/Flyway y adaptador de proveedor de pago HTTP.
+La ruta de escritura síncrona es: validar solicitud, buscar una idempotencia opcional
+tecla, llame al proveedor configurado, transfiera la transacción a `APPROVED` o
+`REJECTED`, luego persista. `GET /transactions` lee una página determinista
+(tiempo creado descendente, luego id descendente).
+## Intención de implementación frente a evidencia presente
+El perímetro de Internet previsto es Route 53 → ALB protegido por AWS WAF (HTTPS terminado
+con ACM) → AWS Load Balancer Controller → Kubernetes Service → pods. El
+controller y ExternalDNS usan EKS Pod Identity; los detalles están en
 `docs/edge-architecture.md`.
-
-The repository contains Helm templates, Kyverno policies, Terraform and GitHub
-Actions workflow definitions. They are deployable artifacts, not evidence that
-an AWS account, EKS cluster, WAF, RDS instance, monitoring stack or admission
-controller is currently running. Those environment controls must be verified
-at deployment time.
-
-The container image is built from a Maven stage and runs the packaged JAR as the
-distroless image's `nonroot` user. Helm also declares probes, resource values,
-a security context, AWS Secrets Store CSI `SecretProviderClass`, and
-NetworkPolicy templates.
-
-## Decision records
-
-The rationale for the major choices is in `docs/adr/`:
-
-- ADR-001 — ports and adapters.
-- ADR-002 — PostgreSQL and exact decimal storage.
-- ADR-003 — client-provided idempotency keys.
-- ADR-004 — EKS as the intended Kubernetes deployment option.
-- ADR-005 — retry/circuit-breaker policy is a roadmap decision, not current code.
+El repositorio contiene plantillas de Helm, políticas de Kyverno, Terraform y GitHub.
+Definiciones de flujo de trabajo de acciones. Son artefactos desplegables, no evidencia de que
+una cuenta de AWS, un clúster de EKS, un WAF, una instancia de RDS, una pila de monitoreo o una admisión
+El controlador está actualmente ejecutándose. Esos controles ambientales deben verificarse.
+en el momento del despliegue.
+La imagen del contenedor se construye a partir de una etapa Maven y ejecuta el JAR empaquetado como el
+Usuario `nonroot` de la imagen sin distribución. Helm también declara sondas, valores de recursos,
+un contexto de seguridad, AWS Secrets Store CSI `SecretProviderClass`, y
+Plantillas de política de red.
+## Registros de decisiones
+El fundamento de las principales opciones se encuentra en `docs/adr/`:
+- ADR-001 — puertos y adaptadores.
+- ADR-002 — PostgreSQL y almacenamiento decimal exacto.
+- ADR-003: claves de idempotencia proporcionadas por el cliente.
+- ADR-004: EKS como opción de implementación de Kubernetes prevista.
+- ADR-005: la política de reintento/disyuntor es una decisión de la hoja de ruta, no el código actual.

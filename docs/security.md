@@ -1,22 +1,16 @@
-# Security Architecture — Spin Transaction Orchestrator
-
-**Date:** 2026-09-08
-**Author:** Engineering & Security Lead
-
+# Arquitectura de seguridad: Spin Transaction Orchestrator
+**Fecha:** 2026-09-08
+**Autor:** Líder de ingeniería y seguridad
 ---
-
-> **Scope:** This document distinguishes repository controls from deployment
-> intent. Helm, Kyverno, Terraform and workflow definitions are versioned in
-> this repository; their enforcement in an AWS/EKS environment has not been
-> verified here. The application-level validation, error mapping and container
-> Dockerfile can be inspected and tested locally.
-
-## Defense-in-Depth Layers
-
-The target deployment applies security controls at every layer of the stack. No
-single control is treated as sufficient; each layer assumes the previous one can
-be bypassed.
-
+> **Alcance:** Este documento distingue los controles del repositorio de la implementación.
+> intención. Las definiciones de Helm, Kyverno, Terraform y flujo de trabajo están versionadas en
+> este repositorio; su aplicación en un entorno AWS/EKS no ha sido
+> verificado aquí. La validación a nivel de aplicación, el mapeo de errores y el contenedor.
+> Dockerfile se puede inspeccionar y probar localmente.
+## Capas de defensa en profundidad
+La implementación de destino aplica controles de seguridad en cada capa de la pila. No
+el control único se considera suficiente; cada capa asume que la anterior puede
+ser omitido.
 ```
 Internet
    │
@@ -43,8 +37,7 @@ Internet
       runAsNonRoot + readOnlyRootFilesystem + seccomp RuntimeDefault
 ```
 
-### Layer Summary
-
+### Resumen de capas
 | Layer | Control | Threat Addressed |
 |---|---|---|
 | AWS WAF | Rate limiting, IP reputation, OWASP rules | DDoS, volumetric attacks, known exploit patterns |
@@ -55,11 +48,8 @@ Internet
 | Distroless | No shell/tools + security context | Container escape, privilege escalation, post-exploitation tooling |
 
 ---
-
-## Supply Chain Security
-
-Threats to the build pipeline are treated with the same rigor as runtime threats.
-
+## Seguridad de la cadena de suministro
+Las amenazas al proceso de compilación se tratan con el mismo rigor que las amenazas en tiempo de ejecución.
 | Stage | Control | Purpose |
 |---|---|---|
 | Pre-push / CI | **Gitleaks** | Detect secrets accidentally committed to source control |
@@ -69,19 +59,14 @@ Threats to the build pipeline are treated with the same rigor as runtime threats
 | Registry | **Cosign image signing** | Cryptographic provenance: only CI-built, verified images are deployed |
 | Dependencies | **Dependabot** | Automated PRs for dependency version updates with CVE context |
 
-The pipeline enforces a **fail-fast** policy: a high-severity Trivy finding or a Gitleaks detection blocks the merge.
-
-Scanner output is triaged as a finding, not automatically accepted as runtime
-risk. The context-aware priority, remediation SLA, exception and verification
-requirements are defined in
+La canalización aplica una política **a prueba de fallos**: un hallazgo de Trivy de alta gravedad o una detección de Gitleaks bloquea la fusión.
+La salida del escáner se clasifica como un hallazgo, no se acepta automáticamente como tiempo de ejecución
+riesgo. La prioridad consciente del contexto, SLA de corrección, excepción y verificación
+Los requisitos se definen en
 [`vulnerability-risk-assessment.md`](security/vulnerability-risk-assessment.md).
-
 ---
-
-## Secret Management
-
-Secrets are never stored in source code, Docker images, or Kubernetes manifests committed to git.
-
+## Gestión secreta
+Los secretos nunca se almacenan en el código fuente, imágenes de Docker o manifiestos de Kubernetes enviados a git.
 ```
 AWS Secrets Manager  (source of truth)
         │
@@ -99,29 +84,22 @@ Application process  (reads mounted files; never logs secret values)
 | TLS certificates | ACM (ALB) | ACM automatic renewal |
 | Application credentials | Mounted directly from Secrets Manager using CSI | Restart pods after rotation to reload configuration |
 
-**What is never done:**
-- Secrets in `.env` files committed to git (`.gitignore` enforced; Gitleaks catches violations)
-- Secrets baked into Docker images (verified by Trivy image scan)
-- Static AWS access keys in GitHub Actions (OIDC eliminates them)
-
+**Lo que nunca se hace:**
+- Secretos en archivos `.env` comprometidos con git (se aplica `.gitignore`; Gitleaks detecta infracciones)
+- Secretos integrados en las imágenes de Docker (verificados mediante escaneo de imágenes de Trivy)
+- Claves de acceso estáticas de AWS en GitHub Actions (OIDC las elimina)
 ---
-
-## Identity and Access
-
-### CI/CD — GitHub Actions
-GitHub Actions authenticates to AWS using **OIDC** (OpenID Connect). No static AWS access keys are stored as GitHub secrets. The OIDC trust policy scopes permissions to the specific repository and branch, preventing cross-repository privilege escalation.
-
-### Pods — IRSA (IAM Roles for Service Accounts)
-Each pod assumes an IAM role bound to its Kubernetes service account via IRSA. The role policy follows least privilege: only the specific Secrets Manager ARN the pod needs to read, and the specific RDS resource it connects to. Pod-level isolation means a compromised pod cannot access credentials of other services.
-
-RDS and Secrets Manager use AWS-managed KMS keys; the platform does not create
-or manage customer KMS keys for these resources.
-
-### Cluster — Kyverno Admission Controller
-Kyverno policies enforce cluster-wide security invariants:
-- Block pods requesting `privileged: true`
-- Require `runAsNonRoot: true` on all pods
-- Require resource `limits` on all containers
-- Enforce `imagePullPolicy: Always` to prevent stale cached images
-
-These policies apply to all namespaces, including future services added to the cluster.
+## Identidad y Acceso
+### CI/CD: Acciones de GitHub
+GitHub Actions se autentica en AWS mediante **OIDC** (OpenID Connect). No se almacenan claves de acceso estáticas de AWS como secretos de GitHub. La política de confianza de OIDC limita los permisos al repositorio y a la sucursal específicos, evitando la escalada de privilegios entre repositorios.
+### Pods: IRSA (roles de IAM para cuentas de servicio)
+Cada pod asume una función de IAM vinculada a su cuenta de servicio de Kubernetes a través de IRSA. La política de rol sigue el privilegio mínimo: solo el ARN de Secrets Manager específico que el pod necesita leer y el recurso RDS específico al que se conecta. El aislamiento a nivel de pod significa que un pod comprometido no puede acceder a las credenciales de otros servicios.
+RDS y Secrets Manager utilizan claves KMS administradas por AWS; la plataforma no crea
+o administrar claves KMS de clientes para estos recursos.
+### Clúster: Controlador de admisión de Kyverno
+Las políticas de Kyverno imponen invariantes de seguridad en todo el clúster:
+- Bloquear pods solicitando `privileged: true`
+- Requiere `runAsNonRoot: true` en todos los pods
+- Requerir recurso `limits` en todos los contenedores.
+- Aplicar `imagePullPolicy: Always` para evitar imágenes almacenadas en caché obsoletas
+Estas políticas se aplican a todos los espacios de nombres, incluidos los servicios futuros agregados al clúster.

@@ -1,29 +1,22 @@
-# Security policy
-
-## Reporting a vulnerability
-
-Please do not open a public issue for a suspected vulnerability. Report it
-privately to the repository owner with a description, affected revision,
-reproduction steps and potential impact. Avoid including real credentials or
-transaction data.
-
-The maintainer should acknowledge the report, assess severity and coordinate a
-fix before public disclosure. Security fixes should receive a regression test
-where practical and be released through the normal reviewed pull-request flow.
-
-## Supported scope
-
-This repository is an MVP/challenge implementation. Its default local database
-credentials and unauthenticated API are not production-ready. See
-`docs/security.md`, `docs/threat-model.md` and
-`docs/limitations-roadmap-ai.md` for implemented controls, intended controls
-and known gaps.
-
-## Secure development expectations
-
-- Never commit secrets, `.env` files, private keys or real transaction data.
-- Use the supplied CI checks as review gates; investigate findings rather than
-  silently suppressing them.
-- Keep dependencies and action references reviewed and pinned as appropriate.
-- Treat image signing, IaC and Kubernetes policies as controls that require
-  deployed-environment verification, not as a substitute for it.
+# Política de seguridad
+## Informar de una vulnerabilidad
+No abra una edición pública por una vulnerabilidad sospechosa. Denúncialo
+de forma privada al propietario del repositorio con una descripción, revisión afectada,
+Pasos de reproducción y posible impacto. Evite incluir credenciales reales o
+datos de la transacción.
+El mantenedor debe reconocer el informe, evaluar la gravedad y coordinar una
+arreglar antes de la divulgación pública. Las correcciones de seguridad deberían recibir una prueba de regresión
+cuando sea práctico y se publicará a través del flujo normal de solicitud de extracción revisada.
+## Alcance admitido
+Este repositorio es una implementación de MVP/desafío. Su base de datos local predeterminada
+Las credenciales y la API no autenticada no están listas para producción. Ver
+`docs/security.md`, `docs/threat-model.md` y
+`docs/limitations-roadmap-ai.md` para controles implementados, controles previstos
+y lagunas conocidas.
+## Expectativas de desarrollo seguras
+- Nunca confirmes secretos, archivos `.env`, claves privadas o datos de transacciones reales.
+- Utilice los controles de CI suministrados como puertas de revisión; investigar los hallazgos en lugar de
+  reprimiéndolos silenciosamente.
+- Mantener las dependencias y referencias de acciones revisadas y fijadas según corresponda.
+- Trate las políticas de firma de imágenes, IaC y Kubernetes como controles que requieren
+  verificación del entorno implementado, no como un sustituto de la misma.

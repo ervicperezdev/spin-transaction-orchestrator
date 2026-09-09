@@ -1,15 +1,9 @@
-# Compliance mapping and evidence register
-
-## Purpose and boundary
-
-This is a design-time mapping of controls versioned in this repository to selected control objectives in NIST SP 800-53 Rev. 5, CIS AWS Foundations and CIS Kubernetes Benchmark, PCI DSS v4.0, and ISO/IEC 27001:2022 Annex A. It describes a **contribution to compliance**, not a certification, attestation, or assertion that a deployed AWS account meets any framework.
-
-Evidence below is repository evidence as of the revision under review. An independent assessor must validate deployed configuration, operating effectiveness, scope (including whether cardholder data is present), people and processes, and the organization-selected versions of each framework. This MVP does not claim PCI DSS cardholder-data-environment (CDE) scope; payment data handling and tokenization must be assessed before making that determination.
-
-Status meanings: **Implemented in IaC/chart** is inspectable declarative evidence, not proof it has been applied; **Designed/documented** needs an operational implementation; **Gap** is not implemented or lacks evidence.
-
-## Evidence and gap register
-
+# Mapeo de cumplimiento y registro de evidencia
+## Propósito y límite
+Esta es una asignación en tiempo de diseño de los controles versionados en este repositorio para objetivos de control seleccionados en NIST SP 800-53 Rev. 5, CIS AWS Foundations y CIS Kubernetes Benchmark, PCI DSS v4.0 e ISO/IEC 27001:2022 Anexo A. Describe una **contribución al cumplimiento**, no una certificación, atestación o afirmación de que una cuenta de AWS implementada cumple con cualquier marco.
+La evidencia a continuación es evidencia de depósito a partir de la revisión bajo revisión. Un evaluador independiente debe validar la configuración implementada, la efectividad operativa, el alcance (incluido si los datos del titular de la tarjeta están presentes), las personas y los procesos, y las versiones seleccionadas por la organización de cada marco. Este MVP no reclama el alcance del entorno de datos del titular de la tarjeta PCI DSS (CDE); El manejo de datos de pago y la tokenización deben evaluarse antes de tomar esa determinación.
+Significados del estado: **Implementado en IaC/gráfico** es evidencia declarativa inspeccionable, no prueba de que se ha aplicado; **Diseñado/documentado** necesita una implementación operativa; **Brecha** no se implementa o carece de evidencia.
+## Registro de evidencias y brechas
 | Control objective | Repository evidence | Framework contribution | Status / gap and required validation |
 | --- | --- | --- | --- |
 | Segment public, workload and database traffic | `terraform/modules/edge/main.tf` defines managed ALB and node security groups; `terraform/modules/eks/main.tf` keeps the EKS API private; `terraform/modules/rds/main.tf` makes RDS private and permits PostgreSQL only from the node SG; Helm has default-deny workload `NetworkPolicy` with explicit ingress/egress. | NIST SC-7; CIS AWS networking / EKS network-policy guidance; PCI DSS 1; ISO A.8.20, A.8.22. | **Implemented in IaC/chart.** Confirm Terraform state, VPC routing/NAT, ALB-to-WAF association, NetworkPolicy-capable CNI enforcement, allowed CIDRs and no alternate paths in each environment. |
@@ -22,17 +16,12 @@ Status meanings: **Implemented in IaC/chart** is inspectable declarative evidenc
 | Resilience, recovery and change protection | RDS uses Multi-AZ, encrypted backups with seven-day retention, deletion protection and final snapshot; Helm defines HPA/PDB/probes. Changes are versioned as Terraform, Helm and reviewed PR workflows. | NIST CP-9, CP-10, CM-2, CM-3; CIS AWS backup/configuration guidance; PCI DSS 6.4, 12.10; ISO A.8.13, A.8.14, A.8.32. | **Implemented configuration, operating-evidence gap.** Test backup restore and failover, document RPO/RTO, protect Terraform state, enforce change approvals, and retain deployment/change evidence. |
 | Govern risk, scope and security responsibilities | `SECURITY.md`, `docs/threat-model.md`, `docs/security-remediation.md`, and vulnerability assessment documentation define reporting, threat/risk context and remediation expectations. | NIST PL-2, RA-3, RA-5, PM-9; PCI DSS 12; ISO A.5.1, A.5.2, A.5.7, A.5.36. | **Partially documented.** Establish approved policies, asset/data-flow inventory, CDE scoping decision, vendor/service-provider responsibility matrix, security training, annual review and auditable risk acceptance process outside this repository. |
 
-## Material gaps and ownership
-
-The following are prerequisites to describing controls as operating in an AWS environment. They remain outside this repository's Terraform scope and must have an accountable platform or security owner, target date, and retained evidence:
-
-1. Account bootstrap: AWS Organizations/account guardrails, CloudTrail, Config, GuardDuty, Security Hub, centralized immutable log storage, alerting, IAM Identity Center/MFA and root-account protections.
-2. Cluster bootstrap: EKS OIDC provider for workload IRSA, Secrets Store CSI driver and AWS provider, Kyverno installation/enforcement, CNI NetworkPolicy support, access entries/RBAC and admission verification.
-3. Deployment assurance: a reviewed Terraform apply process, remote-state encryption/access controls, production values/secret ARNs, WAF logging and certificate/WAF attachment validation.
-4. Operational assurance: tested restore/failover and incident exercises, access reviews, vulnerability remediation SLAs/exceptions, log retention, signature verification enforcement and evidence retention.
-5. PCI scope: data discovery and a payment-provider integration review to establish whether PAN, SAD, tokens or other account data enters this system; if it does, perform a formal CDE segmentation and PCI assessment.
-
-## Review cadence and evidence collection
-
-Review this mapping on material architecture, AWS account, framework-version, or payment-data-flow changes, and at least annually. For each review, retain: the commit and approved PR, Terraform plan/apply and state evidence (redacted), rendered Helm manifests and admission results, AWS configuration exports, IAM/access-review records, CI findings/SBOM/signature verification, backup restore and incident-exercise results. Do not place secrets, transaction payloads, cardholder data, or raw sensitive logs in the evidence package.
-
+## Brechas materiales y propiedad
+Los siguientes son requisitos previos para describir que los controles funcionan en un entorno de AWS. Permanecen fuera del alcance de Terraform de este repositorio y deben tener una plataforma responsable o propietario de seguridad, fecha objetivo y evidencia retenida:
+1. Arranque de cuenta: AWS Organizations/guardias de cuentas, CloudTrail, Config, GuardDuty, Security Hub, almacenamiento de registros inmutable centralizado, alertas, IAM Identity Center/MFA y protecciones de cuentas raíz.
+2. Arranque del clúster: proveedor EKS OIDC para la carga de trabajo IRSA, controlador CSI de Secrets Store y proveedor de AWS, instalación/aplicación de Kyverno, soporte de NetworkPolicy de CNI, entradas de acceso/RBAC y verificación de admisión.
+3. Garantía de implementación: un proceso de aplicación de Terraform revisado, controles de acceso/cifrado de estado remoto, valores de producción/ARN secretos, registro de WAF y validación de certificados/archivos adjuntos de WAF.
+4. Garantía operativa: restauración/conmutación por error probada y ejercicios de incidentes, revisiones de acceso, SLA/excepciones de corrección de vulnerabilidades, retención de registros, aplicación de verificación de firmas y retención de evidencia.
+5. Alcance de PCI: descubrimiento de datos y revisión de la integración del proveedor de pagos para establecer si PAN, SAD, tokens u otros datos de la cuenta ingresan a este sistema; si es así, realice una segmentación CDE formal y una evaluación PCI.
+## Revisar la cadencia y la recopilación de pruebas.
+Revise este mapeo sobre la arquitectura del material, la cuenta de AWS, la versión del marco o los cambios en el flujo de datos de pago, y al menos una vez al año. Para cada revisión, conserve: el compromiso y las relaciones públicas aprobadas, el plan/aplicación de Terraform y la evidencia estatal (redactada), los manifiestos de Helm presentados y los resultados de admisión, las exportaciones de configuración de AWS, los registros de revisión de acceso/IAM, los hallazgos de CI/SBOM/verificación de firmas, la restauración de copias de seguridad y los resultados del ejercicio de incidentes. No coloque secretos, cargas útiles de transacciones, datos de titulares de tarjetas ni registros confidenciales sin procesar en el paquete de pruebas.

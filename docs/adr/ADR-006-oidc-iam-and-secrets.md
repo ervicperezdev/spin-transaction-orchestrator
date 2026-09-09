@@ -1,57 +1,45 @@
-# ADR-006: OIDC federation, IRSA and Secrets Manager access
-
-**Status:** Accepted  
-**Date:** 2026-09-08
-
-## Context
-
-The delivery pipeline must publish a reviewed image to ECR and discover one EKS
-cluster without storing AWS access keys in GitHub. Application credentials must
-not be committed to Git, injected as Terraform variables, or shared with EKS
-nodes. The transaction API reads approved Secrets Manager values directly
-through the AWS Secrets Store CSI driver; no secret is synchronized into
+# ADR-006: Acceso a federación OIDC, IRSA y Secrets Manager
+**Estado:** Aceptado
+**Fecha:** 2026-09-08
+## Contexto
+La canalización de entrega debe publicar una imagen revisada en ECR y descubrir un EKS.
+clúster sin almacenar claves de acceso de AWS en GitHub. Las credenciales de la solicitud deben
+no estar comprometido con Git, inyectado como variables de Terraform ni compartido con EKS
+nodos. La API de transacciones lee los valores aprobados de Secrets Manager directamente
+a través del controlador CSI de AWS Secrets Store; ningún secreto está sincronizado en
 Kubernetes.
-
-## Decision
-
-Use two independent IAM roles and web-identity federation:
-
-1. `*-github-deploy` trusts only GitHub's OIDC provider through
-   `sts:AssumeRoleWithWebIdentity`. Its conditions require
-   `aud=sts.amazonaws.com` and the exact
+## Decisión
+Utilice dos roles de IAM independientes y una federación de identidades web:
+1. `*-github-deploy` confía únicamente en el proveedor OIDC de GitHub a través de
+   `sts:AssumeRoleWithWebIdentity`. Sus condiciones requieren
+   `aud=sts.amazonaws.com` y el exacto
    `repo:ervicperezdev/spin-transaction-orchestrator:ref:refs/heads/main`
-   subject (parameterized for another reviewed environment).
-2. `*-transaction-api` trusts only the EKS OIDC provider and the exact API
-   service account subject. It can only `DescribeSecret` and `GetSecretValue`
-   for the explicit Secrets Manager ARNs supplied by the environment owner.
-
-The CI role can authenticate to ECR, push only to the orchestrator repository,
-and call `eks:DescribeCluster` only for its cluster. EKS Kubernetes API access
-is separately granted through EKS access entries/RBAC; it is not implicit IAM
-administrator access. The API's IRSA role reads only the explicit secret ARN
-and the CSI driver exposes each JSON property as a read-only mounted file.
-
-Encryption uses AWS-managed keys: RDS uses the AWS-managed RDS key and Secrets
-Manager uses `alias/aws/secretsmanager`. The custom EKS KMS key was removed;
-EKS uses its platform-managed default encryption behavior.
-
-## Consequences
-
-- GitHub Actions must use the output `github_deploy_role_arn` as the protected
-  `AWS_DEPLOY_ROLE_ARN` repository secret. No `AWS_ACCESS_KEY_ID` or
-  `AWS_SECRET_ACCESS_KEY` may be configured.
-- The EKS OIDC provider is an account bootstrap prerequisite. Its ARN and
-  issuer host/path are explicit Terraform inputs so a cluster cannot
-  accidentally trust an arbitrary issuer.
-- Secret values are created and rotated out of band. Terraform receives only
-  exact secret ARNs, and the API service account is annotated with the output
-  workload role ARN.
-- GitHub Actions OIDC and EKS IRSA remain separate blast-radius boundaries;
-  neither role may assume the other.
-
-## Rejected alternatives
-
-- Long-lived IAM users or repository secrets containing AWS keys.
-- A node IAM role with Secrets Manager access.
-- Broad GitHub OIDC subjects such as `repo:owner/repository:*`.
-- External Secrets Operator or a Kubernetes Secret copy of the source value.
+   sujeto (parametrizado para otro entorno revisado).
+2. `*-transaction-api` confía únicamente en el proveedor EKS OIDC y en la API exacta
+   Asunto de la cuenta de servicio. Sólo puede `DescribeSecret` y `GetSecretValue`
+   para los ARN explícitos de Secrets Manager proporcionados por el propietario del entorno.
+La función de CI puede autenticarse en ECR, enviar solo al repositorio del orquestador,
+y llame a `eks:DescribeCluster` solo para su clúster. Acceso a la API de EKS Kubernetes
+se otorga por separado a través de entradas de acceso EKS/RBAC; no es IAM implícito
+acceso de administrador. La función IRSA de la API lee solo el ARN secreto explícito
+y el controlador CSI expone cada propiedad JSON como un archivo montado de solo lectura.
+El cifrado utiliza claves administradas por AWS: RDS utiliza la clave y los secretos de RDS administrados por AWS
+El administrador usa `alias/aws/secretsmanager`. Se eliminó la clave EKS KMS personalizada;
+EKS utiliza su comportamiento de cifrado predeterminado administrado por la plataforma.
+## Consecuencias
+- Las GitHub Actions deben usar la salida `github_deploy_role_arn` como protegida
+  Secreto del repositorio `AWS_DEPLOY_ROLE_ARN`. Sin `AWS_ACCESS_KEY_ID` o
+  Se puede configurar `AWS_SECRET_ACCESS_KEY`.
+- El proveedor EKS OIDC es un requisito previo de inicio de cuenta. Su ARN y
+  el host/ruta del emisor son entradas explícitas de Terraform, por lo que un clúster no puede
+  confiar accidentalmente en un emisor arbitrario.
+- Los valores secretos se crean y rotan fuera de la banda. Terraform recibe sólo
+  ARN secretos exactos y la cuenta de servicio API está anotada con el resultado
+  ARN del rol de carga de trabajo.
+- GitHub Actions OIDC y EKS IRSA siguen siendo límites de radio de explosión separados;
+  ningún papel puede asumir el otro.
+## Alternativas rechazadas
+- Usuarios de IAM de larga duración o secretos de repositorio que contienen claves de AWS.
+- Un rol de IAM de nodo con acceso a Secrets Manager.
+- Temas amplios de GitHub OIDC como `repo:owner/repository:*`.
+- Operador de secretos externos o una copia secreta de Kubernetes del valor de origen.

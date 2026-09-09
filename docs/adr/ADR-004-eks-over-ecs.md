@@ -1,53 +1,38 @@
-# ADR-004: Amazon EKS over ECS Fargate
-
-**Status:** Accepted
-**Date:** 2026-09-08
-**Author:** Engineering & Security Lead
-
+# ADR-004: Amazon EKS sobre ECS Fargate
+**Estado:** Aceptado
+**Fecha:** 2026-09-08
+**Autor:** Líder de ingeniería y seguridad
 ---
-
-## Context
-
-The transaction orchestrator must be deployed on a container orchestration platform. Two primary options exist within the AWS ecosystem: Amazon EKS (managed Kubernetes) and Amazon ECS (with Fargate). The choice affects operational complexity, security controls expressiveness, and the breadth of platform engineering capabilities that can be demonstrated.
-
+## Contexto
+El orquestador de transacciones debe implementarse en una plataforma de orquestación de contenedores. Existen dos opciones principales dentro del ecosistema de AWS: Amazon EKS (Kubernetes administrado) y Amazon ECS (con Fargate). La elección afecta la complejidad operativa, la expresividad de los controles de seguridad y la amplitud de las capacidades de ingeniería de plataformas que se pueden demostrar.
 ---
-
-## Decision
-
-Target **Amazon EKS** with managed node groups when the infrastructure is
-provisioned. This ADR records an intended platform choice, not a claim that an
-EKS environment currently exists.
-
-The primary driver for this context is the ability to demonstrate the full breadth of Kubernetes security controls:
-- `NetworkPolicy` for pod-level traffic segmentation (deny-all default, explicit allow rules)
-- `PodSecurityContext` with `runAsNonRoot`, `readOnlyRootFilesystem`, `seccompProfile: RuntimeDefault`
-- **Kyverno** admission controller enforcing cluster-wide security policies (block privileged pods, enforce image pull policy, require resource limits)
-- **IRSA** (IAM Roles for Service Accounts) for least-privilege AWS API access without node-level credentials
-- **Helm** for reproducible, version-controlled deployments
-- **HPA** (Horizontal Pod Autoscaler) for load-driven scaling
-
+## Decisión
+Apunte a **Amazon EKS** con grupos de nodos administrados cuando la infraestructura esté
+aprovisionado. Este ADR registra una elección de plataforma prevista, no una afirmación de que una
+El entorno EKS existe actualmente.
+El principal impulsor de este contexto es la capacidad de demostrar toda la amplitud de los controles de seguridad de Kubernetes:
+- `NetworkPolicy` para la segmentación del tráfico a nivel de pod (denegar todo por defecto, reglas de permiso explícitas)
+- `PodSecurityContext` con `runAsNonRoot`, `readOnlyRootFilesystem`, `seccompProfile: RuntimeDefault`
+- Controlador de admisión **Kyverno** que aplica políticas de seguridad en todo el clúster (bloquea pods privilegiados, aplica política de extracción de imágenes, exige límites de recursos)
+- **IRSA** (roles de IAM para cuentas de servicio) para acceso a la API de AWS con privilegios mínimos sin credenciales a nivel de nodo
+- **Helm** para implementaciones reproducibles y controladas por versiones
+- **HPA** (Horizontal Pod Autoscaler) para escalado basado en carga
 ---
-
-## Consequences
-
-**Positive:**
-- Full Kubernetes security primitive surface: NetworkPolicy, Pod Security Admission, Kyverno, IRSA, seccomp profiles.
-- Helm charts provide templated, reviewable infrastructure as code.
-- Richer observability integration: Prometheus metrics, Grafana dashboards, structured log shipping.
-- Demonstrates K8s security engineering depth relevant to fintech platform roles.
-
-**Negative:**
-- Significantly higher operational complexity than ECS Fargate: cluster upgrades, node group management, add-on lifecycle (CoreDNS, kube-proxy, VPC CNI).
-- Higher baseline cost than Fargate (always-on node capacity vs. per-task billing).
-- Requires K8s expertise on the operations team; a team without it faces a steep learning curve.
-
+## Consecuencias
+**Positivo:**
+- Superficie primitiva de seguridad completa de Kubernetes: NetworkPolicy, Pod Security Admission, Kyverno, IRSA, perfiles seccomp.
+- Los gráficos de timón proporcionan una infraestructura revisable y con plantillas como código.
+- Integración de observabilidad más rica: métricas de Prometheus, paneles de Grafana, envío de registros estructurados.
+- Demuestra la profundidad de la ingeniería de seguridad de K8 relevante para los roles de la plataforma fintech.
+**Negativo:**
+- Complejidad operativa significativamente mayor que ECS Fargate: actualizaciones de clústeres, administración de grupos de nodos, ciclo de vida de complementos (CoreDNS, kube-proxy, VPC CNI).
+- Costo base más alto que Fargate (capacidad de nodo siempre activo frente a facturación por tarea).
+- Requiere experiencia de K8 en el equipo de operaciones; un equipo sin él se enfrenta a una pronunciada curva de aprendizaje.
 ---
-
-## Alternatives Considered
-
+## Alternativas consideradas
 | Alternative | Reason Rejected (for this context) |
 |---|---|
 | **ECS Fargate** | Simpler and lower-cost for a single service; lacks NetworkPolicy, Kyverno, and the full K8s security primitive surface. **Preferred for a single-service production system without K8s expertise on the team.** |
 | **AWS Lambda** | Event-driven model does not map naturally to synchronous REST + persistent database connection pooling; cold starts add latency variance unacceptable for payment SLAs |
 
-> **Trade-off note:** For a single-service production system where the team does not have Kubernetes expertise, **ECS Fargate would be the recommended choice** — lower complexity, lower cost, and AWS manages the control plane entirely. EKS is chosen here specifically to demonstrate platform security depth.
+> **Nota de compensación:** Para un sistema de producción de servicio único donde el equipo no tiene experiencia en Kubernetes, **ECS Fargate sería la opción recomendada**: menor complejidad, menor costo y AWS administra el plano de control por completo. EKS se elige aquí específicamente para demostrar la profundidad de la seguridad de la plataforma.

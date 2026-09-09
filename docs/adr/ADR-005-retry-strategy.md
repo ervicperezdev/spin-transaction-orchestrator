@@ -1,44 +1,29 @@
-# ADR-005: Resilience4j Retry and Circuit Breaker Strategy
-
-**Status:** Proposed
-**Date:** 2026-09-08
-**Author:** Engineering & Security Lead
-
+# ADR-005: Estrategia de reintento y disyuntor Resilience4j
+**Estado:** Propuesto
+**Fecha:** 2026-09-08
+**Autor:** Líder de ingeniería y seguridad
 ---
-
-## Context
-
-The transaction orchestrator calls an external payment provider over HTTPS. The provider can be temporarily unavailable (transient network errors, brief maintenance) or permanently reject a request (invalid input, authentication failure). Naive retry logic risks two critical failure modes:
-
-1. **Duplicate financial operations:** retrying a timed-out request when the provider may have already executed it.
-2. **Provider saturation:** retrying aggressively during a provider outage amplifies load, worsening recovery.
-
-The retry strategy must distinguish between error classes where retry is safe, ambiguous, or forbidden.
-
+## Contexto
+El orquestador de transacciones llama a un proveedor de pagos externo a través de HTTPS. El proveedor puede no estar disponible temporalmente (errores transitorios de red, mantenimiento breve) o rechazar permanentemente una solicitud (entrada no válida, error de autenticación). La lógica de reintento ingenua corre el riesgo de dos modos de falla críticos:
+1. **Operaciones financieras duplicadas:** reintentar una solicitud caducada cuando es posible que el proveedor ya la haya ejecutado.
+2. **Saturación del proveedor:** reintentar agresivamente durante una interrupción del proveedor amplifica la carga y empeora la recuperación.
+La estrategia de reintento debe distinguir entre clases de error en las que el reintento es seguro, ambiguo o prohibido.
 ---
-
-## Decision
-
-Adopt the following retry and circuit-breaker policy when Resilience4j (or an
-equivalent) is introduced. It is not implemented in the current application.
-Today the HTTP adapter only applies the configured connection/read timeouts and
-maps provider failures to `PaymentProviderUnavailableException`.
-
-### Configuration
-
-**Timeouts:**
-- Connect timeout: 2 seconds
-- Read timeout: 3 seconds
-
-Rationale: payment APIs should respond within milliseconds to low single-digit seconds. Longer waits hold a thread and a DB connection open unnecessarily.
-
-**Circuit Breaker:**
-- Failure rate threshold: 50% (over a sliding window of 10 calls)
-- Wait duration in OPEN state: 10 seconds before moving to HALF_OPEN
-- Half-open permitted calls: 3 (probe calls before deciding to CLOSE or stay OPEN)
-
-**Retry policy — explicit error classification:**
-
+## Decisión
+Adopte la siguiente política de reintento y disyuntor cuando Resilience4j (o un
+equivalente). No está implementado en la aplicación actual.
+Hoy en día, el adaptador HTTP solo aplica los tiempos de espera de conexión/lectura configurados y
+asigna fallas del proveedor a `PaymentProviderUnavailableException`.
+### Configuración
+**Tiempos de espera:**
+- Tiempo de espera de conexión: 2 segundos
+- Tiempo de espera de lectura: 3 segundos
+Justificación: las API de pago deben responder en milisegundos a segundos de un solo dígito. Las esperas más largas retienen un hilo y una conexión de base de datos se abre innecesariamente.
+**Disyuntor:**
+- Umbral de tasa de fracaso: 50% (en una ventana móvil de 10 llamadas)
+- Duración de la espera en estado ABIERTO: 10 segundos antes de pasar a HALF_OPEN
+- Llamadas permitidas semiabiertas: 3 (sondear llamadas antes de decidir CERRAR o permanecer ABIERTO)
+**Política de reintento: clasificación de error explícito:**
 | Error Type | Retry? | Rationale |
 |---|---|---|
 | Connection refused / network unreachable | Yes (up to 2 retries) | Provider was not reached; no financial operation occurred |
@@ -47,25 +32,18 @@ Rationale: payment APIs should respond within milliseconds to low single-digit s
 | HTTP 4XX (400, 409, 422) | **NO** | Functional rejection; the provider evaluated the request and refused it; retry will not change the outcome |
 | HTTP 5XX (other than 503) | **NO** | Ambiguous server-side error; retry without reconciliation is unsafe |
 
-Retry backoff: exponential with jitter, base 500 ms.
-
+Reintento de retroceso: exponencial con fluctuación, base 500 ms.
 ---
-
-## Consequences
-
-**Positive:**
-- Circuit breaker prevents cascading failure: once the provider is determined unhealthy, calls fast-fail immediately instead of exhausting the thread pool.
-- Explicit no-retry on timeout forces the reconciliation design to be addressed rather than hidden behind optimistic retries.
-- No-retry on 4XX reduces unnecessary load and avoids masking bugs in request construction.
-
-**Negative / Known Gaps:**
-- Explicit non-retry on timeout means timed-out calls surface as errors to the caller. Clients must handle these as potentially-ambiguous states and use the `Idempotency-Key` on retry.
-- This strategy does not resolve the ambiguous-state problem — it makes it visible. A **reconciliation job** (roadmap) is required to detect and resolve provider-executed-but-not-persisted transactions.
-
+## Consecuencias
+**Positivo:**
+- El disyuntor evita fallas en cascada: una vez que se determina que el proveedor no está en buen estado, llama a fast-fail inmediatamente en lugar de agotar el grupo de subprocesos.
+- El no-reintento explícito en el tiempo de espera obliga a abordar el diseño de reconciliación en lugar de ocultarlo detrás de reintentos optimistas.
+- No reintentar en 4XX reduce la carga innecesaria y evita enmascarar errores en la construcción de solicitudes.
+**Brechas negativas/conocidas:**
+- El no reintento explícito en el tiempo de espera significa que las llamadas agotadas aparecen como errores para la persona que llama. Los clientes deben manejarlos como estados potencialmente ambiguos y utilizar `Idempotency-Key` al reintentar.
+- Esta estrategia no resuelve el problema del Estado ambiguo: lo hace visible. Se requiere un **trabajo de conciliación** (hoja de ruta) para detectar y resolver transacciones ejecutadas por el proveedor pero no persistentes.
 ---
-
-## Alternatives Considered
-
+## Alternativas consideradas
 | Alternative | Reason Rejected |
 |---|---|
 | **Retry on all errors including timeout** | Unacceptable double-charge risk; hides the reconciliation gap |
