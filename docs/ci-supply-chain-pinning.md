@@ -34,3 +34,9 @@ the Quality Gate fails if Semgrep (or either peer security control) does not
 return `success`. Dependabot retains its `github-actions` ecosystem entry so it
 can propose future Action pin updates; Maven, GitHub Actions, and Docker updates
 use a seven-day default cooldown.
+
+The proposed development EKS endpoint risk acceptance is tracked in
+[EXC-001](security/EXC-001-eks-public-endpoint.md). It does not modify this gate.
+Any approved suppression must be limited to the identified rule/resource,
+reference that record and its expiry, and preserve blocking behavior for all
+other findings.

@@ -32,7 +32,17 @@ The following are prerequisites to describing controls as operating in an AWS en
 4. Operational assurance: tested restore/failover and incident exercises, access reviews, vulnerability remediation SLAs/exceptions, log retention, signature verification enforcement and evidence retention.
 5. PCI scope: data discovery and a payment-provider integration review to establish whether PAN, SAD, tokens or other account data enters this system; if it does, perform a formal CDE segmentation and PCI assessment.
 
+### Development endpoint exception
+
+The private-EKS claim in the segmentation row describes the current repository
+baseline. If the proposed [EXC-001](security/EXC-001-eks-public-endpoint.md)
+exception is activated, that control is **deviated for the development EKS
+management endpoint** until closure. Public exposure must not be reported as
+private segmentation or protected by the application's WAF. Record the actual
+CIDRs, approval, deployment revision and verification evidence before claiming
+compensating controls. This exception grants no production or regulatory
+compliance attestation.
+
 ## Review cadence and evidence collection
 
 Review this mapping on material architecture, AWS account, framework-version, or payment-data-flow changes, and at least annually. For each review, retain: the commit and approved PR, Terraform plan/apply and state evidence (redacted), rendered Helm manifests and admission results, AWS configuration exports, IAM/access-review records, CI findings/SBOM/signature verification, backup restore and incident-exercise results. Do not place secrets, transaction payloads, cardholder data, or raw sensitive logs in the evidence package.
-

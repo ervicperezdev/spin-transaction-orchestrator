@@ -93,6 +93,9 @@ resource "aws_iam_role_policy_attachment" "node_ecr" {
   policy_arn = "arn:aws:iam::aws:policy/AmazonEC2ContainerRegistryReadOnly"
 }
 
+# EXC-001: temporary dev exception for GitHub-hosted runners.
+# Expires: 2026-09-23. See docs/security/EXC-001-eks-public-endpoint.md.
+# nosemgrep: terraform.lang.security.eks-public-endpoint-enabled.eks-public-endpoint-enabled
 resource "aws_eks_cluster" "this" {
   name     = var.cluster_name
   role_arn = aws_iam_role.cluster.arn

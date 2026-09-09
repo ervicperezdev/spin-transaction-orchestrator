@@ -108,6 +108,21 @@ Application process  (reads mounted files; never logs secret values)
 
 ## Identity and Access
 
+### Development EKS API endpoint exception
+
+The repository baseline uses a private EKS API endpoint. The challenge's use of
+standard GitHub-hosted runners motivates the proposed, time-bound exception
+[EXC-001](security/EXC-001-eks-public-endpoint.md). It explicitly covers the risk
+of Internet-wide IPv4 reachability if required for the demonstration, while
+retaining IAM authentication and Kubernetes authorization. It is not a
+production configuration or a false-positive determination.
+
+The record contains the owner, proposed expiry, required approval and live
+verification evidence, residual risk, and private-access remediation path.
+Approval and operational verification remain pending. Application WAF/ALB
+controls do not protect this management endpoint. Documentation alone does not
+change the Terraform baseline or bypass the Semgrep gate.
+
 ### CI/CD — GitHub Actions
 GitHub Actions authenticates to AWS using **OIDC** (OpenID Connect). No static AWS access keys are stored as GitHub secrets. The OIDC trust policy scopes permissions to the specific repository and branch, preventing cross-repository privilege escalation.
 

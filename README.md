@@ -7,6 +7,7 @@ MVP backend for transaction orchestration. It uses Java 21, Spring Boot, Maven a
 - Architecture and decision records: `docs/architecture.md` and `docs/adr/`
 - Versioned OpenAPI source: `docs/openapi.yaml` (the running app exposes `/v3/api-docs`)
 - Security model and known risks: `docs/security.md`, `docs/threat-model.md` and `SECURITY.md`
+- Development EKS endpoint exception: [EXC-001](docs/security/EXC-001-eks-public-endpoint.md) records the proposed temporary public-access deviation for GitHub-hosted runners, its expiry, required evidence and rule-specific Semgrep annotation. It does not activate public access.
 - Signal catalog and operational boundary: `docs/observability.md`
 - Capacity assumptions, cost drivers and scaling decisions: `docs/finops-scalability.md`
 - CloudTrail, GuardDuty, Security Hub and WAF-log triage design: `docs/cloud-security-operations.md`
@@ -234,4 +235,3 @@ cosign verify-attestation \
 The SBOM corresponds to the digest of the published image. Admission-controller
 enforcement of signature and SBOM policies is a separate infrastructure
 evolution and is not implemented here.
-
