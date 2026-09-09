@@ -8,6 +8,7 @@ MVP backend for transaction orchestration. It uses Java 21, Spring Boot, Maven a
 - Versioned OpenAPI source: `docs/openapi.yaml` (the running app exposes `/v3/api-docs`)
 - Security model and known risks: `docs/security.md`, `docs/threat-model.md` and `SECURITY.md`
 - Signal catalog and operational boundary: `docs/observability.md`
+- Capacity assumptions, cost drivers and scaling decisions: `docs/finops-scalability.md`
 - CloudTrail, GuardDuty, Security Hub and WAF-log triage design: `docs/cloud-security-operations.md`
 - Current limitations, roadmap and AI-use statement: `docs/limitations-roadmap-ai.md`
 
