@@ -48,6 +48,24 @@ jobs:
       - name: Package (skip tests – tests ran in PR gate)
         run: ./mvnw --batch-mode --no-transfer-progress package -DskipTests
 
+      - name: Debug GitHub OIDC claims
+        uses: actions/github-script@d746ffe35508b1917358783b479e04febd2b8f71 # v9.0.0
+        with:
+          script: |
+            const token = await core.getIDToken('sts.amazonaws.com');
+            const payload = JSON.parse(
+              Buffer.from(token.split('.')[1], 'base64url').toString()
+            );
+
+            console.log('iss:', payload.iss);
+            console.log('aud:', payload.aud);
+            console.log('sub:', payload.sub);
+            console.log('repository:', payload.repository);
+            console.log('repository_id:', payload.repository_id);
+            console.log('repository_owner:', payload.repository_owner);
+            console.log('repository_owner_id:', payload.repository_owner_id);
+            console.log('ref:', payload.ref);
+
       # AWS auth via OIDC – no static keys ──────────────────────────────────
       - name: Configure AWS credentials (OIDC)
         uses: aws-actions/configure-aws-credentials@cbe3b392738ccf3f987d68400dafcf4b0624a56c # v6.2.4
