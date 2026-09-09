@@ -23,6 +23,7 @@ import java.time.ZoneOffset;
 import java.util.ArrayList;
 import java.util.Currency;
 import java.util.List;
+import java.util.Optional;
 import org.junit.jupiter.api.Test;
 
 class TransactionExecutionServiceTest {
@@ -59,7 +60,7 @@ class TransactionExecutionServiceTest {
     @Test
     void rejectsAmountAtMinimumBeforeCallingProvider() {
         assertRejectedBeforeExternalInteractions(
-                new ExecuteTransactionCommand(TransactionType.DEBIT, new BigDecimal("1.00"), mxn()),
+                new ExecuteTransactionCommand(TransactionType.DEBIT, new BigDecimal("1.00"), mxn(), null),
                 TransactionValidationError.INVALID_AMOUNT);
     }
 
@@ -69,7 +70,7 @@ class TransactionExecutionServiceTest {
         TransactionRepository repository = savingRepository();
 
         Transaction result = new TransactionExecutionService(repository, provider, CLOCK)
-                .execute(new ExecuteTransactionCommand(TransactionType.DEBIT, new BigDecimal("1.01"), mxn()));
+                .execute(new ExecuteTransactionCommand(TransactionType.DEBIT, new BigDecimal("1.01"), mxn(), null));
 
         assertThat(result.status()).isEqualTo(TransactionStatus.APPROVED);
         verify(provider).execute(org.mockito.ArgumentMatchers.any(Transaction.class));
@@ -78,7 +79,7 @@ class TransactionExecutionServiceTest {
     @Test
     void rejectsDebitAboveMaximumBeforeCallingProvider() {
         assertRejectedBeforeExternalInteractions(
-                new ExecuteTransactionCommand(TransactionType.DEBIT, new BigDecimal("10000.01"), mxn()),
+                new ExecuteTransactionCommand(TransactionType.DEBIT, new BigDecimal("10000.01"), mxn(), null),
                 TransactionValidationError.DEBIT_AMOUNT_LIMIT_EXCEEDED);
     }
 
@@ -88,7 +89,7 @@ class TransactionExecutionServiceTest {
         TransactionRepository repository = savingRepository();
 
         new TransactionExecutionService(repository, provider, CLOCK)
-                .execute(new ExecuteTransactionCommand(TransactionType.DEBIT, new BigDecimal("10000.00"), mxn()));
+                .execute(new ExecuteTransactionCommand(TransactionType.DEBIT, new BigDecimal("10000.00"), mxn(), null));
 
         verify(provider).execute(org.mockito.ArgumentMatchers.any(Transaction.class));
     }
@@ -99,7 +100,7 @@ class TransactionExecutionServiceTest {
         TransactionRepository repository = savingRepository();
 
         new TransactionExecutionService(repository, provider, CLOCK)
-                .execute(new ExecuteTransactionCommand(TransactionType.CREDIT, new BigDecimal("10000.01"), mxn()));
+                .execute(new ExecuteTransactionCommand(TransactionType.CREDIT, new BigDecimal("10000.01"), mxn(), null));
 
         verify(provider).execute(org.mockito.ArgumentMatchers.any(Transaction.class));
     }
@@ -107,15 +108,32 @@ class TransactionExecutionServiceTest {
     @Test
     void rejectsNonMxnCurrencyBeforeCallingProvider() {
         assertRejectedBeforeExternalInteractions(
-                new ExecuteTransactionCommand(TransactionType.CREDIT, new BigDecimal("25.50"), Currency.getInstance("USD")),
+                new ExecuteTransactionCommand(TransactionType.CREDIT, new BigDecimal("25.50"), Currency.getInstance("USD"), null),
                 TransactionValidationError.UNSUPPORTED_CURRENCY);
     }
 
     @Test
     void rejectsMissingTransactionTypeBeforeCallingProvider() {
         assertRejectedBeforeExternalInteractions(
-                new ExecuteTransactionCommand(null, new BigDecimal("25.50"), mxn()),
+                new ExecuteTransactionCommand(null, new BigDecimal("25.50"), mxn(), null),
                 TransactionValidationError.INVALID_TRANSACTION_TYPE);
+    }
+
+    @Test
+    void returnsExistingTransactionOnDuplicateIdempotencyKeyWithoutCallingProvider() {
+        InMemoryRepository repository = new InMemoryRepository();
+        PaymentProvider provider = mock(PaymentProvider.class);
+        when(provider.execute(org.mockito.ArgumentMatchers.any(Transaction.class)))
+                .thenReturn(com.spin.transactionorchestrator.application.port.out.PaymentProviderResult.approved("provider-123"));
+        TransactionExecutionService service = new TransactionExecutionService(repository, provider, CLOCK);
+        ExecuteTransactionCommand commandWithKey = new ExecuteTransactionCommand(TransactionType.DEBIT, new BigDecimal("25.50"), mxn(), "idem-key-abc");
+
+        Transaction first = service.execute(commandWithKey);
+        Transaction second = service.execute(commandWithKey);
+
+        assertThat(second).isSameAs(first);
+        verify(provider, org.mockito.Mockito.times(1)).execute(org.mockito.ArgumentMatchers.any(Transaction.class));
+        assertThat(repository.transactions).hasSize(1);
     }
 
     private void assertRejectedBeforeExternalInteractions(
@@ -147,7 +165,7 @@ class TransactionExecutionServiceTest {
     }
 
     private ExecuteTransactionCommand command() {
-        return new ExecuteTransactionCommand(TransactionType.DEBIT, new BigDecimal("25.50"), mxn());
+        return new ExecuteTransactionCommand(TransactionType.DEBIT, new BigDecimal("25.50"), mxn(), null);
     }
 
     private Currency mxn() {
@@ -168,6 +186,13 @@ class TransactionExecutionServiceTest {
                 com.spin.transactionorchestrator.application.port.in.FindTransactionsQuery query) {
             return new com.spin.transactionorchestrator.application.port.in.TransactionPage(List.copyOf(transactions),
                     query.page(), query.size(), transactions.size(), 1);
+        }
+
+        @Override
+        public Optional<Transaction> findByIdempotencyKey(String key) {
+            return transactions.stream()
+                    .filter(t -> key.equals(t.idempotencyKey()))
+                    .findFirst();
         }
     }
 }

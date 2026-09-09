@@ -16,7 +16,7 @@ class TransactionEntityMapperTest {
     @Test
     void roundTripsAnApprovedTransactionWithoutLosingMonetaryOrTerminalStateData() {
         Instant createdAt = Instant.parse("2026-09-08T04:05:06.123456Z");
-        Transaction transaction = Transaction.pending(TransactionType.DEBIT, new BigDecimal("9999.99"), mxn(), createdAt);
+        Transaction transaction = Transaction.pending(TransactionType.DEBIT, new BigDecimal("9999.99"), mxn(), createdAt, null);
         transaction.approve("provider-123");
 
         Transaction rehydrated = mapper.toDomain(mapper.toEntity(transaction));
@@ -31,7 +31,7 @@ class TransactionEntityMapperTest {
 
     @Test
     void roundTripsARejectedTransactionWithoutLosingTerminalStateData() {
-        Transaction transaction = Transaction.pending(TransactionType.CREDIT, new BigDecimal("25.50"), mxn(), Instant.EPOCH);
+        Transaction transaction = Transaction.pending(TransactionType.CREDIT, new BigDecimal("25.50"), mxn(), Instant.EPOCH, null);
         transaction.reject("Insufficient balance");
 
         Transaction rehydrated = mapper.toDomain(mapper.toEntity(transaction));

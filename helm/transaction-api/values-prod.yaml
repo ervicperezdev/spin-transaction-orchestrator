@@ -1,0 +1,39 @@
+replicaCount: 3
+
+autoscaling:
+  minReplicas: 3
+  maxReplicas: 20
+  targetCPUUtilizationPercentage: 60
+
+resources:
+  requests:
+    cpu: 500m
+    memory: 1Gi
+  limits:
+    cpu: 1000m
+    memory: 2Gi
+
+pdb:
+  minAvailable: 2
+
+config:
+  dbUrl: "jdbc:postgresql://REPLACE_WITH_PROD_RDS_ENDPOINT:5432/transactions"
+  paymentProviderBaseUrl: "https://REPLACE_WITH_PROVIDER_URL"
+  serverPort: "8080"
+
+externalSecret:
+  remoteRef:
+    key: spin/transaction-api/prod
+
+ingress:
+  annotations:
+    kubernetes.io/ingress.class: alb
+    alb.ingress.kubernetes.io/scheme: internet-facing
+    alb.ingress.kubernetes.io/target-type: ip
+    alb.ingress.kubernetes.io/ssl-redirect: "443"
+    alb.ingress.kubernetes.io/certificate-arn: "REPLACE_WITH_ACM_ARN"
+  hosts:
+    - host: "transaction-api.example.com"
+      paths:
+        - path: /
+          pathType: Prefix

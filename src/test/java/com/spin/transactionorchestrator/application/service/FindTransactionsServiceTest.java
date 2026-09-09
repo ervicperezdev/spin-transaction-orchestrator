@@ -6,6 +6,7 @@ import com.spin.transactionorchestrator.application.port.out.TransactionReposito
 import com.spin.transactionorchestrator.application.port.in.FindTransactionsQuery;
 import com.spin.transactionorchestrator.application.port.in.TransactionPage;
 import com.spin.transactionorchestrator.domain.model.Transaction;
+import java.util.Optional;
 import org.junit.jupiter.api.Test;
 
 class FindTransactionsServiceTest {
@@ -20,6 +21,11 @@ class FindTransactionsServiceTest {
             @Override
             public TransactionPage find(FindTransactionsQuery query) {
                 return new TransactionPage(java.util.List.of(), query.page(), query.size(), 0, 0);
+            }
+
+            @Override
+            public Optional<Transaction> findByIdempotencyKey(String key) {
+                return Optional.empty();
             }
         };
 

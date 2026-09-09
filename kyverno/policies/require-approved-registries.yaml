@@ -1,0 +1,60 @@
+apiVersion: kyverno.io/v1
+kind: ClusterPolicy
+metadata:
+  name: require-approved-registries
+  annotations:
+    policies.kyverno.io/title: Require Images From Approved Registries
+    policies.kyverno.io/category: Supply Chain Security
+    policies.kyverno.io/severity: high
+    policies.kyverno.io/description: >-
+      Images must only be pulled from approved registries to reduce exposure
+      to supply chain attacks. This policy restricts image sources to
+      AWS ECR repositories and Google Distroless images.
+      Approved registries: *.dkr.ecr.*.amazonaws.com/* and gcr.io/distroless/*
+spec:
+  validationFailureAction: Audit
+  background: true
+  rules:
+    - name: require-approved-registry
+      match:
+        any:
+          - resources:
+              kinds:
+                - Pod
+      validate:
+        message: "Images must be from approved registries: *.dkr.ecr.*.amazonaws.com/* or gcr.io/distroless/*"
+        foreach:
+          - list: "request.object.spec.containers"
+            deny:
+              conditions:
+                all:
+                  - key: "{{ element.image }}"
+                    operator: NotMatch
+                    value: "^[0-9]+\\.dkr\\.ecr\\.[a-z0-9-]+\\.amazonaws\\.com/.+"
+                  - key: "{{ element.image }}"
+                    operator: NotMatch
+                    value: "^gcr\\.io/distroless/.+"
+    - name: require-approved-registry-init-containers
+      match:
+        any:
+          - resources:
+              kinds:
+                - Pod
+      preconditions:
+        any:
+          - key: "{{ request.object.spec.initContainers[] | length(@) }}"
+            operator: GreaterThanOrEquals
+            value: 1
+      validate:
+        message: "Init container images must be from approved registries: *.dkr.ecr.*.amazonaws.com/* or gcr.io/distroless/*"
+        foreach:
+          - list: "request.object.spec.initContainers"
+            deny:
+              conditions:
+                all:
+                  - key: "{{ element.image }}"
+                    operator: NotMatch
+                    value: "^[0-9]+\\.dkr\\.ecr\\.[a-z0-9-]+\\.amazonaws\\.com/.+"
+                  - key: "{{ element.image }}"
+                    operator: NotMatch
+                    value: "^gcr\\.io/distroless/.+"

@@ -1,5 +1,8 @@
 version: 2
 updates:
+  # Keep Maven dependencies up to date. PRs are capped at 5 open at a time
+  # to avoid review fatigue; oldest PRs are closed automatically once the cap
+  # is reached and a newer version is available.
   - package-ecosystem: maven
     directory: /
     schedule:
@@ -8,6 +11,10 @@ updates:
       default-days: 7
 
   # Dependabot understands full-SHA Action references and updates their pins.
+    open-pull-requests-limit: 5
+
+  # Keep GitHub Actions pinned to their latest patch releases. This prevents
+  # supply-chain attacks via mutable action tags (e.g., @v4 pointing to new code).
   - package-ecosystem: github-actions
     directory: /
     schedule:
@@ -15,6 +22,9 @@ updates:
     cooldown:
       default-days: 7
 
+
+  # Keep the base image in Dockerfile updated so security patches in the JRE
+  # layer are pulled in automatically rather than waiting for manual bumps.
   - package-ecosystem: docker
     directory: /
     schedule:

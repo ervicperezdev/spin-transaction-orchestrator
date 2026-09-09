@@ -1,0 +1,197 @@
+name: PR Validation
+
+# Full gate pipeline: every pull request to main must pass ALL critical jobs
+# before merging. Jobs that do not share data run in parallel to keep
+# wall-clock time low while still blocking on every failure category.
+
+on:
+  pull_request:
+    branches: [main]
+
+# Least-privilege default: jobs only need to read source code.
+# Individual jobs add narrower write permissions where required.
+permissions:
+  contents: read
+
+jobs:
+  # ── 1. COMPILE ────────────────────────────────────────────────────────────
+  compile:
+    name: Compile
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Set up Java 21 (Temurin)
+        uses: actions/setup-java@v4
+        with:
+          java-version: '21'
+          distribution: temurin
+          cache: maven
+
+      - name: Compile source
+        run: ./mvnw --batch-mode --no-transfer-progress compile
+
+  # ── 2. TEST (depends on compile) ──────────────────────────────────────────
+  test:
+    name: Unit & Integration Tests
+    needs: compile
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Set up Java 21 (Temurin)
+        uses: actions/setup-java@v4
+        with:
+          java-version: '21'
+          distribution: temurin
+          cache: maven
+
+      - name: Run tests
+        run: ./mvnw --batch-mode --no-transfer-progress test
+
+      - name: Upload Surefire test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: surefire-reports-${{ github.run_id }}
+          path: target/surefire-reports/
+          retention-days: 14
+
+  # ── 3. GITLEAKS – secret scanning (parallel) ──────────────────────────────
+  # Gitleaks detects accidental credential commits (API keys, tokens, etc.)
+  # before they reach the repository history on main.
+  gitleaks:
+    name: Gitleaks – Secret Scan
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          # Full history so gitleaks can scan all commits in the PR, not just HEAD.
+          fetch-depth: 0
+
+      - name: Scan for secrets
+        uses: gitleaks/gitleaks-action@v3
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  # ── 4. SEMGREP – SAST (parallel) ──────────────────────────────────────────
+  # Static analysis finds common security bugs (injection, unsafe deserialization,
+  # etc.) in application code before merge. continue-on-error is set because
+  # the auto ruleset may emit noise for a demo project; flip to false in prod.
+  semgrep:
+    name: Semgrep – SAST
+    runs-on: ubuntu-latest
+    continue-on-error: true   # remove for production: noise in auto ruleset
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Run Semgrep SAST scan
+        run: |
+          docker run --rm \
+            -v "$GITHUB_WORKSPACE:/src" \
+            returntocorp/semgrep:latest \
+            semgrep --config=auto --error --quiet
+
+  # ── 5. TRIVY SCA – dependency vulnerability scan (parallel) ───────────────
+  # Software Composition Analysis: scans pom.xml and the full source tree for
+  # known CVEs in third-party libraries. Only HIGH/CRITICAL unfixed vulns fail.
+  trivy-sca:
+    name: Trivy – SCA (Dependency Scan)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Scan dependencies for vulnerabilities
+        run: |
+          docker run --rm \
+            --volume "$GITHUB_WORKSPACE:/workspace:ro" \
+            aquasec/trivy:0.58.1 fs /workspace \
+            --scanners vuln \
+            --severity HIGH,CRITICAL \
+            --ignore-unfixed \
+            --exit-code 1 \
+            --no-progress
+
+  # ── 6. CHECKOV – IaC scan (parallel) ──────────────────────────────────────
+  # Checks Terraform and Helm manifests for misconfigurations (open S3 buckets,
+  # missing resource limits, privilege escalation, etc.). Skipped gracefully
+  # when neither terraform/ nor helm/ directories exist.
+  checkov:
+    name: Checkov – IaC Scan
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Install Checkov
+        run: pip install checkov --quiet
+
+      - name: Scan Terraform (if present)
+        if: hashFiles('terraform/**') != ''
+        run: checkov -d terraform/ --quiet --soft-fail
+
+      - name: Scan Helm charts (if present)
+        if: hashFiles('helm/**') != ''
+        run: checkov -d helm/ --quiet --soft-fail
+
+  # ── 7. HELM LINT (parallel) ───────────────────────────────────────────────
+  # Validates Helm chart syntax and template rendering. Skips gracefully when
+  # the chart directory is absent (e.g., early-stage branches without Helm).
+  helm-lint:
+    name: Helm Lint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Lint Helm chart (if present)
+        if: hashFiles('helm/transaction-api/Chart.yaml') != ''
+        run: |
+          # Helm is pre-installed on ubuntu-latest GitHub-hosted runners.
+          helm lint helm/transaction-api/
+
+  # ── 8. HADOLINT – Dockerfile lint (parallel) ──────────────────────────────
+  # Redundant with container-security.yml on push, but included here so the
+  # PR gate catches Dockerfile violations before merge, not after.
+  hadolint:
+    name: Hadolint – Dockerfile Lint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Lint Dockerfile
+        run: docker run --rm -i hadolint/hadolint:v2.12.0 < Dockerfile
+
+  # ── 9. QUALITY GATE (depends on all jobs above) ───────────────────────────
+  # A single required status check that the branch protection rule can target.
+  # Fails the PR if any critical security or build job failed.
+  quality-gate:
+    name: Quality Gate
+    needs: [compile, test, gitleaks, semgrep, trivy-sca, checkov, helm-lint, hadolint]
+    runs-on: ubuntu-latest
+    if: always()
+    steps:
+      - name: Evaluate gate
+        run: |
+          echo "compile:    ${{ needs.compile.result }}"
+          echo "test:       ${{ needs.test.result }}"
+          echo "gitleaks:   ${{ needs.gitleaks.result }}"
+          echo "semgrep:    ${{ needs.semgrep.result }}"
+          echo "trivy-sca:  ${{ needs.trivy-sca.result }}"
+          echo "checkov:    ${{ needs.checkov.result }}"
+          echo "helm-lint:  ${{ needs.helm-lint.result }}"
+          echo "hadolint:   ${{ needs.hadolint.result }}"
+
+          # Critical jobs that MUST pass (semgrep has continue-on-error for demo).
+          CRITICAL_JOBS=(
+            "${{ needs.compile.result }}"
+            "${{ needs.test.result }}"
+            "${{ needs.gitleaks.result }}"
+            "${{ needs.trivy-sca.result }}"
+            "${{ needs.hadolint.result }}"
+          )
+          for result in "${CRITICAL_JOBS[@]}"; do
+            if [[ "$result" == "failure" || "$result" == "cancelled" ]]; then
+              echo "ERROR: One or more critical jobs failed. PR cannot be merged."
+              exit 1
+            fi
+          done
+          echo "All critical jobs passed. PR is ready to merge."

@@ -44,12 +44,15 @@ class TransactionEntity {
     @Column(name = "created_at", nullable = false)
     private Instant createdAt;
 
+    @Column(name = "idempotency_key", unique = true, length = 255)
+    private String idempotencyKey;
+
     protected TransactionEntity() {
         // Required by JPA.
     }
 
     TransactionEntity(UUID id, TransactionType type, TransactionStatus status, BigDecimal amount, String currency,
-            String providerReference, String rejectionReason, Instant createdAt) {
+            String providerReference, String rejectionReason, Instant createdAt, String idempotencyKey) {
         this.id = id;
         this.type = type;
         this.status = status;
@@ -58,6 +61,7 @@ class TransactionEntity {
         this.providerReference = providerReference;
         this.rejectionReason = rejectionReason;
         this.createdAt = createdAt;
+        this.idempotencyKey = idempotencyKey;
     }
 
     UUID id() { return id; }
@@ -68,4 +72,5 @@ class TransactionEntity {
     String providerReference() { return providerReference; }
     String rejectionReason() { return rejectionReason; }
     Instant createdAt() { return createdAt; }
+    String idempotencyKey() { return idempotencyKey; }
 }

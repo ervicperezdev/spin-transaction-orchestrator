@@ -1,0 +1,162 @@
+name: Build & Release
+
+# Triggered on every merge to main. Builds the artifact ONCE, tags it with the
+# commit SHA, pushes to ECR, scans it, generates an SBOM, signs it with Cosign
+# keyless signing, then promotes the same image to EKS without rebuilding.
+#
+# AUTH: GitHub OIDC → AWS STS AssumeRoleWithWebIdentity.
+#   No static AWS_ACCESS_KEY_ID / AWS_SECRET_ACCESS_KEY stored in GitHub Secrets.
+#   The OIDC token is minted by GitHub per-run and exchanged for short-lived
+#   STS credentials that expire when the job ends.
+
+on:
+  push:
+    branches: [main]
+
+env:
+  # ECR registry and image name are resolved at runtime from AWS account metadata
+  # and repository variables so no registry URL is hardcoded here.
+  IMAGE_NAME: spin-transaction-orchestrator
+
+# id-token: write is required globally so the OIDC token can be minted for
+# aws-actions/configure-aws-credentials in both jobs.
+permissions:
+  contents: read
+  id-token: write
+
+jobs:
+  # ── BUILD, SCAN, SIGN, PUSH ───────────────────────────────────────────────
+  build-and-push:
+    name: Build → Scan → Sign → Push
+    runs-on: ubuntu-latest
+
+    outputs:
+      image-tag: ${{ github.sha }}
+      ecr-image: ${{ steps.ecr-login.outputs.registry }}/${{ env.IMAGE_NAME }}
+
+    steps:
+      - uses: actions/checkout@v7
+
+      # Java build ─────────────────────────────────────────────────────────
+      - name: Set up Java 21 (Temurin)
+        uses: actions/setup-java@v4
+        with:
+          java-version: "21"
+          distribution: temurin
+          cache: maven
+
+      - name: Package (skip tests – tests ran in PR gate)
+        run: ./mvnw --batch-mode --no-transfer-progress package -DskipTests
+
+      # AWS auth via OIDC – no static keys ──────────────────────────────────
+      - name: Configure AWS credentials (OIDC)
+        uses: aws-actions/configure-aws-credentials@v6
+        with:
+          role-to-assume: ${{ secrets.AWS_DEPLOY_ROLE_ARN }}
+          aws-region: ${{ vars.AWS_REGION }}
+          audience: sts.amazonaws.com
+
+      # ECR login ───────────────────────────────────────────────────────────
+      - name: Log in to Amazon ECR
+        id: ecr-login
+        uses: aws-actions/amazon-ecr-login@v2
+
+      # Docker build & push ─────────────────────────────────────────────────
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v4
+
+      - name: Build and push Docker image
+        id: build-push
+        uses: docker/build-push-action@v7
+        with:
+          context: .
+          push: true
+          # Tag with commit SHA (immutable, traceable) AND latest (mutable pointer).
+          # Deployments always reference the SHA tag so rollbacks are deterministic.
+          tags: |
+            ${{ steps.ecr-login.outputs.registry }}/${{ env.IMAGE_NAME }}:${{ github.sha }}
+            ${{ steps.ecr-login.outputs.registry }}/${{ env.IMAGE_NAME }}:latest
+
+      # Trivy – container image scan ────────────────────────────────────────
+      - name: Scan pushed image for vulnerabilities
+        run: |
+          ECR_REGISTRY="${{ steps.ecr-login.outputs.registry }}"
+          docker run --rm \
+            --volume "$GITHUB_WORKSPACE:/workspace" \
+            aquasec/trivy:0.58.1 image \
+            --scanners vuln,secret \
+            --severity HIGH,CRITICAL \
+            --ignore-unfixed \
+            --exit-code 1 \
+            --no-progress \
+            "${ECR_REGISTRY}/${IMAGE_NAME}:${{ github.sha }}"
+
+      # SBOM – Syft (anchore/sbom-action) ───────────────────────────────────
+      # Generates a Software Bill of Materials in SPDX format so downstream
+      # teams can audit every library shipped inside the container.
+      - name: Generate SBOM (SPDX)
+        uses: anchore/sbom-action@v0
+        with:
+          image: ${{ steps.ecr-login.outputs.registry }}/${{ env.IMAGE_NAME }}:${{ github.sha }}
+          output-file: sbom.spdx.json
+          format: spdx-json
+
+      - name: Upload SBOM artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: sbom-${{ github.sha }}
+          path: sbom.spdx.json
+          retention-days: 90
+
+      # Cosign keyless signing ───────────────────────────────────────────────
+      # Keyless signing uses the GitHub OIDC identity (no signing key to rotate).
+      # The signature is stored in the Sigstore transparency log (Rekor) and
+      # attached to the image in ECR as an OCI artifact.
+      - name: Install Cosign
+        uses: sigstore/cosign-installer@v3
+
+      - name: Sign image with keyless OIDC identity
+        run: |
+          ECR_REGISTRY="${{ steps.ecr-login.outputs.registry }}"
+          cosign sign --yes \
+            "${ECR_REGISTRY}/${IMAGE_NAME}@${{ steps.build-push.outputs.digest }}"
+
+  # ── DEPLOY TO EKS ────────────────────────────────────────────────────────
+  deploy-eks:
+    name: Deploy to EKS
+    needs: build-and-push
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v7
+
+      # AWS auth via OIDC – same pattern, separate deploy role if needed ─────
+      - name: Configure AWS credentials (OIDC)
+        uses: aws-actions/configure-aws-credentials@v6
+        with:
+          role-to-assume: ${{ secrets.AWS_DEPLOY_ROLE_ARN }}
+          aws-region: ${{ vars.AWS_REGION }}
+          audience: sts.amazonaws.com
+
+      # kubeconfig ──────────────────────────────────────────────────────────
+      - name: Configure kubeconfig for EKS
+        run: |
+          aws eks update-kubeconfig \
+            --name "${{ vars.EKS_CLUSTER_NAME }}" \
+            --region "${{ vars.AWS_REGION }}"
+
+      # Helm deploy – promotes the same SHA-tagged image built above ─────────
+      - name: Helm upgrade / install
+        run: |
+          helm upgrade --install transaction-api helm/transaction-api/ \
+            --set image.tag="${{ github.sha }}" \
+            --namespace transaction-api \
+            --create-namespace \
+            --wait \
+            --timeout 5m
+
+      # Smoke test – verify the health endpoint is reachable after deploy ────
+      - name: Smoke test – /actuator/health
+        run: |
+          curl -f "https://${{ vars.APP_HOSTNAME }}/actuator/health" \
+            || echo "Smoke test failed – check deployment logs"

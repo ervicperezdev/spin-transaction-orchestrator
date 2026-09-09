@@ -9,11 +9,12 @@ class TransactionEntityMapper {
     TransactionEntity toEntity(Transaction transaction) {
         return new TransactionEntity(transaction.id(), transaction.type(), transaction.status(), transaction.amount(),
                 transaction.currency().getCurrencyCode(), transaction.providerReference(), transaction.rejectionReason(),
-                transaction.createdAt());
+                transaction.createdAt(), transaction.idempotencyKey());
     }
 
     Transaction toDomain(TransactionEntity entity) {
         return Transaction.rehydrate(entity.id(), entity.type(), entity.amount(), Currency.getInstance(entity.currency()),
-                entity.createdAt(), entity.status(), entity.providerReference(), entity.rejectionReason());
+                entity.createdAt(), entity.status(), entity.providerReference(), entity.rejectionReason(),
+                entity.idempotencyKey());
     }
 }

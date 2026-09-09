@@ -1,0 +1,165 @@
+name: Terraform
+
+# Runs only when Terraform files change, keeping CI cost low.
+# On PR: format-check, validate, Checkov security scan, and plan.
+# On merge to main: apply the saved plan (gated by environment approval).
+#
+# AUTH: GitHub OIDC → AWS STS AssumeRoleWithWebIdentity.
+#   secrets.AWS_TERRAFORM_ROLE_ARN must be a role with permissions scoped to
+#   the Terraform state bucket and the resources it manages. No static keys.
+
+on:
+  pull_request:
+    paths:
+      - "terraform/**"
+  push:
+    branches: [main]
+    paths:
+      - "terraform/**"
+
+permissions:
+  contents: read
+  # pull-requests: write is needed only in the plan job to comment plan output.
+  id-token: write
+
+jobs:
+  # ── TERRAFORM PLAN (runs on every PR that touches terraform/) ─────────────
+  terraform-plan:
+    name: Terraform Plan
+    runs-on: ubuntu-latest
+    if: github.event_name == 'pull_request'
+
+    permissions:
+      contents: read
+      id-token: write
+      pull-requests: write # needed to post plan comment on the PR
+
+    env:
+      TF_DIR: terraform/ # adjust if your root module lives in a subdir
+
+    steps:
+      - uses: actions/checkout@v7
+
+      # AWS auth via OIDC ─────────────────────────────────────────────────
+      - name: Configure AWS credentials (OIDC)
+        uses: aws-actions/configure-aws-credentials@v6
+        with:
+          role-to-assume: ${{ secrets.AWS_TERRAFORM_ROLE_ARN }}
+          aws-region: ${{ vars.AWS_REGION }}
+
+      # Terraform setup ───────────────────────────────────────────────────
+      - name: Set up Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_wrapper: true # wraps terraform output for step outputs
+
+      # Format check – fails if any .tf file is not canonical ────────────
+      - name: Terraform fmt (check)
+        run: terraform fmt -check -recursive "${{ env.TF_DIR }}"
+
+      # Init – required before validate and plan ──────────────────────────
+      - name: Terraform init
+        working-directory: ${{ env.TF_DIR }}
+        run: terraform init -input=false
+
+      # Validate – catches syntax / reference errors ──────────────────────
+      - name: Terraform validate
+        working-directory: ${{ env.TF_DIR }}
+        run: terraform validate
+
+      # Checkov – IaC security scan ───────────────────────────────────────
+      # Detects misconfigurations: open security groups, unencrypted buckets,
+      # missing logging, etc. --soft-fail keeps plan output visible even if
+      # findings exist; remove for a hard gate in production.
+      - name: Checkov IaC scan
+        run: |
+          pip install checkov --quiet
+          checkov -d "${{ env.TF_DIR }}" --quiet --soft-fail
+
+      # Plan ──────────────────────────────────────────────────────────────
+      - name: Terraform plan
+        id: plan
+        working-directory: ${{ env.TF_DIR }}
+        run: terraform plan -input=false -out=tfplan 2>&1 | tee plan_output.txt
+
+      # Post plan output as PR comment ────────────────────────────────────
+      - name: Post plan to PR
+        uses: actions/github-script@v7
+        if: github.event_name == 'pull_request'
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            const fs = require('fs');
+            const plan = fs.readFileSync('${{ env.TF_DIR }}/plan_output.txt', 'utf8');
+            const truncated = plan.length > 60000
+              ? plan.substring(0, 60000) + '\n... (truncated)'
+              : plan;
+            const body = `## Terraform Plan\n\`\`\`\n${truncated}\n\`\`\``;
+            github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body,
+            });
+
+      # Upload plan artifact so apply job can retrieve it ─────────────────
+      - name: Upload tfplan artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: tfplan-${{ github.run_id }}
+          path: ${{ env.TF_DIR }}/tfplan
+          retention-days: 1 # plan is only valid for this workflow run
+
+  # ── TERRAFORM APPLY (runs on merge to main) ───────────────────────────────
+  # The `environment: production` block enforces a required-reviewer gate:
+  # a human must approve before Terraform makes real infrastructure changes.
+  terraform-apply:
+    name: Terraform Apply
+    runs-on: ubuntu-latest
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    environment: production # required-reviewers gate in GitHub Environments
+
+    env:
+      TF_DIR: terraform/
+
+    steps:
+      - uses: actions/checkout@v7
+
+      # AWS auth via OIDC ─────────────────────────────────────────────────
+      - name: Configure AWS credentials (OIDC)
+        uses: aws-actions/configure-aws-credentials@v6
+        with:
+          role-to-assume: ${{ secrets.AWS_TERRAFORM_ROLE_ARN }}
+          aws-region: ${{ vars.AWS_REGION }}
+
+      # Terraform setup ───────────────────────────────────────────────────
+      - name: Set up Terraform
+        uses: hashicorp/setup-terraform@v3
+
+      - name: Terraform init
+        working-directory: ${{ env.TF_DIR }}
+        run: terraform init -input=false
+
+      # Download the plan produced in the PR ──────────────────────────────
+      # NOTE: The plan artifact is only available when the same workflow run
+      # produced it (artifact name includes run_id). For production use, store
+      # the plan in S3 alongside the Terraform state and reference it by commit
+      # SHA instead of run ID.
+      - name: Download tfplan artifact
+        uses: actions/download-artifact@v8
+        with:
+          name: tfplan-${{ github.run_id }}
+          path: ${{ env.TF_DIR }}
+        continue-on-error: true # apply from scratch if plan artifact expired
+
+      # Apply ─────────────────────────────────────────────────────────────
+      - name: Terraform apply
+        working-directory: ${{ env.TF_DIR }}
+        run: |
+          if [ -f tfplan ]; then
+            terraform apply -input=false tfplan
+          else
+            echo "No saved plan found – running apply with auto-approve."
+            echo "Consider enforcing plan artifact in production."
+            terraform apply -input=false -auto-approve
+          fi
