@@ -1,0 +1,89 @@
+name: Terraform apply (development)
+
+on:
+  push:
+    branches: [main]
+    paths: ["terraform/**"]
+
+permissions:
+  contents: read
+  id-token: write
+
+concurrency:
+  group: terraform-development-state
+  cancel-in-progress: false
+
+jobs:
+  plan-and-apply:
+    name: Plan and apply development
+    runs-on: ubuntu-latest
+    environment: development
+    env:
+      TF_IN_AUTOMATION: "true"
+      AWS_REGION: ${{ vars.AWS_REGION }}
+      TF_STATE_BUCKET: ${{ vars.TF_STATE_BUCKET }}
+      TF_STATE_REGION: ${{ vars.TF_STATE_REGION }}
+      TF_VARS_CONTENT: ${{ secrets.TF_DEV_TFVARS }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: hashicorp/setup-terraform@dfe3c3f87815947d99a8997f908cb6525fc44e9e # v4.0.1
+        with:
+          terraform_wrapper: false
+      - uses: aws-actions/configure-aws-credentials@cbe3b392738ccf3f987d68400dafcf4b0624a56c # v6.2.4
+        with:
+          role-to-assume: ${{ secrets.AWS_TERRAFORM_APPLY_ROLE_ARN }}
+          aws-region: ${{ vars.AWS_REGION }}
+          audience: sts.amazonaws.com
+      - name: Check protected environment configuration
+        run: |
+          test -n "$AWS_REGION"
+          test -n "$TF_STATE_BUCKET"
+          test -n "$TF_STATE_REGION"
+          test -n "$TF_VARS_CONTENT"
+      - name: Materialize protected variable file
+        working-directory: terraform/environments/dev
+        run: |
+          umask 077
+          printf '%s' "$TF_VARS_CONTENT" > ci.auto.tfvars
+      - name: Initialize remote backend
+        working-directory: terraform/environments/dev
+        run: |
+          terraform init -input=false -backend-config="bucket=$TF_STATE_BUCKET" -backend-config="key=spin-transaction-orchestrator/dev/terraform.tfstate" -backend-config="region=$TF_STATE_REGION" -backend-config="encrypt=true" -backend-config="use_lockfile=true"
+      - name: Format, validate and security gate
+        run: |
+          terraform fmt -check -recursive terraform
+          terraform -chdir=terraform/environments/dev validate
+          pip install checkov --quiet
+          checkov -d terraform --quiet
+      - name: Fail when remote state drift is detected
+        working-directory: terraform/environments/dev
+        run: |
+          set +e
+          terraform plan -input=false -no-color -refresh-only -detailed-exitcode -out=drift.tfplan -var-file=ci.auto.tfvars >/dev/null
+          result=$?
+          set -e
+          rm -f drift.tfplan
+          test "$result" -eq 0 || { echo "::error::Se detectó drift o Terraform falló; no se aplicará ningún cambio."; exit 1; }
+      - name: Generate reviewed deployment plan
+        working-directory: terraform/environments/dev
+        run: terraform plan -input=false -no-color -out=tfplan -var-file=ci.auto.tfvars >/dev/null
+      - name: Upload protected binary plan
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: terraform-development-plan-${{ github.sha }}
+          path: terraform/environments/dev/tfplan
+          retention-days: 7
+          if-no-files-found: error
+      - name: Apply exact generated plan
+        working-directory: terraform/environments/dev
+        run: terraform apply -input=false tfplan
+      - name: Deployment record
+        if: always()
+        run: |
+          echo "## Terraform development deployment" >> "$GITHUB_STEP_SUMMARY"
+          echo "Commit: \`${{ github.sha }}\`" >> "$GITHUB_STEP_SUMMARY"
+          echo "Environment: \`development\`" >> "$GITHUB_STEP_SUMMARY"
+      - name: Delete transient variable file
+        if: always()
+        working-directory: terraform/environments/dev
+        run: rm -f ci.auto.tfvars drift.tfplan

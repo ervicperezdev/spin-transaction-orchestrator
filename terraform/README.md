@@ -26,9 +26,64 @@ terraform validate
 terraform plan -var-file=terraform.tfvars
 ```
 
-La aplicación de cambios debe pasar por el proceso de infraestructura revisado;
-no hay un workflow de `apply` de producción en este repositorio. No ejecute
-`apply` desde CI como consecuencia de una validación estática.
+## Pipeline de entrega Terraform
+
+Los workflows no aceptan credenciales AWS estáticas ni archivos `backend.hcl`.
+Todos usan OIDC de GitHub y construyen la configuración S3 en memoria. El
+bucket se debe crear fuera de este estado (bootstrap) con **versioning**,
+cifrado, Block Public Access, una política de TLS y `use_lockfile = true`.
+No guarde state, `*.tfplan`, `*.tfvars` reales ni backend en Git o logs.
+
+| Flujo | Trigger | Identidad y efecto |
+| --- | --- | --- |
+| `Terraform plan (PR)` | PR interno hacia `main` que modifica `terraform/**` | `AWS_TERRAFORM_PLAN_ROLE_ARN`, solo lectura de backend/proveedores. Ejecuta init remoto, fmt, validate, Checkov y plan; publica únicamente conteos de acciones. Nunca aplica. Los PR de forks se omiten deliberadamente para no entregar un token AWS a código no confiable. |
+| `Terraform apply (development)` | push a `main` con cambios en `terraform/**` | Environment `development`, `AWS_TERRAFORM_APPLY_ROLE_ARN`, concurrencia exclusiva por state. Primero comprueba drift con `-refresh-only -detailed-exitcode`; ante drift/error no aplica. Genera, retiene siete días y aplica el mismo `tfplan`, sin `-auto-approve`. |
+| `Terraform apply (production)` | `workflow_dispatch` con `refs/heads/...` o `refs/tags/...` | Un job de plan usa el rol read-only; el job de apply queda bloqueado por el Environment `production`, descarga el artifact de esa misma ejecución y aplica exactamente ese binario con un rol distinto. |
+
+### Configuración de GitHub y AWS
+
+Defina `AWS_REGION`, `TF_STATE_BUCKET` y `TF_STATE_REGION` como variables de
+repositorio o Environment. Configure los valores Terraform reales como secreto
+multilínea `TF_DEV_TFVARS`; el workflow lo escribe con permisos `0600` solo
+durante el job y lo borra al finalizar. Para producción defina además
+`TF_PRODUCTION_STATE_BUCKET`, el secreto `TF_PRODUCTION_TFVARS` y, cuando exista un entorno separado,
+`TF_PRODUCTION_DIRECTORY` (por defecto
+`terraform/environments/production`). El workflow falla de forma segura hasta
+que ese directorio y su configuración protegida existan.
+
+Configure los ARN como secretos de Environment, no como variables: los roles
+son `AWS_TERRAFORM_PLAN_ROLE_ARN` (PR), `AWS_TERRAFORM_APPLY_ROLE_ARN`
+(`development`), `AWS_TERRAFORM_PRODUCTION_PLAN_ROLE_ARN` y
+`TF_PRODUCTION_TFVARS` (`production-plan`), y
+`AWS_TERRAFORM_PRODUCTION_APPLY_ROLE_ARN` (`production`). Cree el Environment
+`production-plan` con acceso limitado para que el plan no requiera exponer
+secretos a nivel de repositorio. Cada trust policy debe validar
+`aud=sts.amazonaws.com`, repositorio, evento/ref permitido y, para apply, el
+subject del Environment correspondiente. El rol de plan solo puede leer el
+bucket/key de estado y describir recursos; el de apply tiene permisos Terraform
+mínimos sobre el ambiente. Ningún rol de plan puede asumir un rol de apply.
+
+En GitHub, configure `development` y `production` con secrets/variables
+restringidos; en `production` exija reviewers, impida que el autor se
+autoapruebe y limite despliegues a `main` y tags protegidos. Proteja también
+esas ramas/tags y convierta el job **Terraform plan (no mutation)** en check
+requerido para los cambios Terraform. Los artifacts de plan son sensibles:
+mantenga el acceso al repositorio mínimo y el retention de siete días.
+
+### Aprobación, evidencia y recuperación
+
+Para producción el operador dispara el workflow con una ref totalmente
+calificada; revisa el resumen y artifact del job `plan`, y un revisor del
+Environment autoriza el job `apply`. El resumen de ejecución conserva ref y
+commit resuelto como registro de despliegue; CloudTrail debe retener
+`AssumeRoleWithWebIdentity` y las llamadas Terraform/AWS.
+
+Si init, seguridad, drift o apply fallan, el workflow falla y no reintenta
+automáticamente. Investigue el estado remoto bloqueado y la causa; use una
+ejecución manual posterior contra una ref protegida. Para recuperación de
+estado, restaure una versión anterior del objeto S3 mediante el procedimiento
+aprobado, valide con un plan de solo lectura y documente el incidente. Nunca
+edite ni borre state/lock a ciegas.
 
 ## Límites y supuestos de seguridad
 

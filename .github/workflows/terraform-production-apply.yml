@@ -1,0 +1,136 @@
+name: Terraform apply (production)
+
+on:
+  workflow_dispatch:
+    inputs:
+      ref:
+        description: Protected branch or signed tag to deploy (for example refs/tags/v1.2.3)
+        required: true
+        type: string
+
+permissions:
+  contents: read
+  id-token: write
+
+concurrency:
+  group: terraform-production-state
+  cancel-in-progress: false
+
+jobs:
+  plan:
+    name: Production plan for approval
+    runs-on: ubuntu-latest
+    environment: production-plan
+    env:
+      TF_IN_AUTOMATION: "true"
+      AWS_REGION: ${{ vars.AWS_REGION }}
+      TF_STATE_BUCKET: ${{ vars.TF_PRODUCTION_STATE_BUCKET }}
+      TF_STATE_REGION: ${{ vars.TF_STATE_REGION }}
+      TF_VARS_CONTENT: ${{ secrets.TF_PRODUCTION_TFVARS }}
+      TF_DIRECTORY: ${{ vars.TF_PRODUCTION_DIRECTORY || 'terraform/environments/production' }}
+      DEPLOY_REF: ${{ inputs.ref }}
+    steps:
+      - name: Validate requested ref
+        run: |
+          case "$DEPLOY_REF" in refs/heads/*|refs/tags/*) ;; *) echo "Use a fully qualified protected branch or tag ref."; exit 1;; esac
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ inputs.ref }}
+      - uses: hashicorp/setup-terraform@dfe3c3f87815947d99a8997f908cb6525fc44e9e # v4.0.1
+        with:
+          terraform_wrapper: false
+      - uses: aws-actions/configure-aws-credentials@cbe3b392738ccf3f987d68400dafcf4b0624a56c # v6.2.4
+        with:
+          role-to-assume: ${{ secrets.AWS_TERRAFORM_PRODUCTION_PLAN_ROLE_ARN }}
+          aws-region: ${{ vars.AWS_REGION }}
+          audience: sts.amazonaws.com
+      - name: Check production configuration
+        run: |
+          test -d "$TF_DIRECTORY"
+          test -n "$TF_VARS_CONTENT"
+          test -n "$TF_STATE_BUCKET" && test -n "$TF_STATE_REGION" && test -n "$AWS_REGION"
+      - name: Materialize protected variable file
+        working-directory: ${{ env.TF_DIRECTORY }}
+        run: |
+          umask 077
+          printf '%s' "$TF_VARS_CONTENT" > ci.auto.tfvars
+      - name: Initialize, validate and security gate
+        working-directory: ${{ env.TF_DIRECTORY }}
+        run: |
+          terraform init -input=false -backend-config="bucket=$TF_STATE_BUCKET" -backend-config="key=spin-transaction-orchestrator/production/terraform.tfstate" -backend-config="region=$TF_STATE_REGION" -backend-config="encrypt=true" -backend-config="use_lockfile=true"
+          terraform fmt -check -recursive ../..
+          terraform validate
+          pip install checkov --quiet
+          checkov -d ../.. --quiet
+      - name: Generate exact approved plan
+        working-directory: ${{ env.TF_DIRECTORY }}
+        run: |
+          terraform plan -input=false -no-color -out=tfplan -var-file=ci.auto.tfvars >/dev/null
+          git rev-parse HEAD > plan-commit.txt
+      - name: Publish non-sensitive plan summary
+        working-directory: ${{ env.TF_DIRECTORY }}
+        run: |
+          terraform show -json tfplan | jq -r '.resource_changes // [] | group_by(.change.actions | join(",")) | map("- \(length) \(.[0].change.actions | join(", "))") | .[]' > "$RUNNER_TEMP/terraform-production-summary.md"
+          {
+            echo "## Production Terraform plan"
+            cat "$RUNNER_TEMP/terraform-production-summary.md"
+            echo
+            echo "Revise this summary and the protected artifact before approving the production Environment."
+          } >> "$GITHUB_STEP_SUMMARY"
+      - name: Retain protected binary plan
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: terraform-production-plan-${{ github.run_id }}
+          path: |
+            ${{ env.TF_DIRECTORY }}/tfplan
+            ${{ env.TF_DIRECTORY }}/plan-commit.txt
+          retention-days: 7
+          if-no-files-found: error
+  apply:
+    name: Apply approved production plan
+    needs: plan
+    runs-on: ubuntu-latest
+    environment: production
+    env:
+      TF_IN_AUTOMATION: "true"
+      AWS_REGION: ${{ vars.AWS_REGION }}
+      TF_DIRECTORY: ${{ vars.TF_PRODUCTION_DIRECTORY || 'terraform/environments/production' }}
+      TF_STATE_BUCKET: ${{ vars.TF_PRODUCTION_STATE_BUCKET }}
+      TF_STATE_REGION: ${{ vars.TF_STATE_REGION }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ inputs.ref }}
+      - uses: hashicorp/setup-terraform@dfe3c3f87815947d99a8997f908cb6525fc44e9e # v4.0.1
+        with:
+          terraform_wrapper: false
+      - uses: aws-actions/configure-aws-credentials@cbe3b392738ccf3f987d68400dafcf4b0624a56c # v6.2.4
+        with:
+          role-to-assume: ${{ secrets.AWS_TERRAFORM_PRODUCTION_APPLY_ROLE_ARN }}
+          aws-region: ${{ vars.AWS_REGION }}
+          audience: sts.amazonaws.com
+      - name: Download approved binary plan
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: terraform-production-plan-${{ github.run_id }}
+          path: ${{ env.TF_DIRECTORY }}
+      - name: Verify the approved ref did not move
+        working-directory: ${{ env.TF_DIRECTORY }}
+        run: test "$(git rev-parse HEAD)" = "$(cat plan-commit.txt)"
+      - name: Initialize the same remote backend
+        working-directory: ${{ env.TF_DIRECTORY }}
+        run: |
+          terraform init -input=false -backend-config="bucket=$TF_STATE_BUCKET" -backend-config="key=spin-transaction-orchestrator/production/terraform.tfstate" -backend-config="region=$TF_STATE_REGION" -backend-config="encrypt=true" -backend-config="use_lockfile=true"
+      - name: Apply exact approved plan
+        working-directory: ${{ env.TF_DIRECTORY }}
+        run: terraform apply -input=false tfplan
+      - name: Deployment record
+        if: always()
+        run: |
+          echo "## Terraform production deployment" >> "$GITHUB_STEP_SUMMARY"
+          echo "Requested ref: \`$DEPLOY_REF\`" >> "$GITHUB_STEP_SUMMARY"
+          echo "Resolved commit: \`$(git rev-parse HEAD)\`" >> "$GITHUB_STEP_SUMMARY"
+      - name: Delete transient plan material
+        if: always()
+        working-directory: ${{ env.TF_DIRECTORY }}
+        run: rm -f tfplan ci.auto.tfvars plan-commit.txt
