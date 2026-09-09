@@ -50,6 +50,24 @@ revisar la propiedad/validación de ACM y configurar los valores de Helm de impl
 las salidas `acm_certificate_arn` y `waf_web_acl_arn`. Una única puerta de enlace NAT
 es intencional para la línea base de desarrollo; La producción debe utilizar un NAT.
 puerta de enlace por zona de disponibilidad o endpoints de VPC aprobados.
+
+## Fuente canónica del FQDN y smoke post-despliegue
+
+La fuente única del FQDN es `application_hostname` del ambiente Terraform
+(`terraform output -raw application_hostname`). El valor de entorno de GitHub
+`APP_HOSTNAME` debe copiar exactamente esa salida durante el alta o modificación
+del ambiente. El workflow lo exige antes de Helm y lo inyecta como
+`ingress.hostname`; el chart construye tanto el host de Ingress como la anotación
+de ExternalDNS desde ese único valor. `values-dev.yaml` no contiene un FQDN.
+
+El smoke de post-despliegue de `development` se ejecuta solo desde un runner con
+acceso público y comprueba, en orden, rollout/endpoints, Ingress y hostname ALB,
+estado de ACM, resolución DNS y finalmente HTTPS. Cada espera está acotada y un
+fallo recopila `describe ingress`, pods/endpoints y eventos para distinguir una
+causa de infraestructura de un fallo de aplicación. En un ambiente privado este
+script debe correr desde un runner privado o un Job Kubernetes con ServiceAccount
+de privilegio mínimo; un runner hospedado por GitHub no debe obtener acceso a esa
+red para ejecutar el smoke.
 ## Grupos de seguridad
 Terraform posee todos los grupos de seguridad relacionados con las cargas de trabajo. El grupo público ALB permite
 sólo TCP/80 (redireccionamiento) y TCP/443 desde Internet, y puede salir sólo a

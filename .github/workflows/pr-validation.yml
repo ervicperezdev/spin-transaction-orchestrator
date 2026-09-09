@@ -145,7 +145,7 @@ jobs:
         if: hashFiles('helm/transaction-api/Chart.yaml') != ''
         run: |
           # Helm is pre-installed on ubuntu-latest GitHub-hosted runners.
-          helm lint helm/transaction-api/
+          helm lint helm/transaction-api/ --set-string ingress.hostname=lint.example.invalid
 
   # ── 8. HADOLINT – Dockerfile lint (parallel) ──────────────────────────────
   # Redundant with container-security.yml on push, but included here so the

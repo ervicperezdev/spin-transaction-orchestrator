@@ -41,17 +41,16 @@ secretsManager:
 
 ingress:
   enabled: true
+  # CI sets this from APP_HOSTNAME, which must equal Terraform's
+  # application_hostname output. Do not hard-code a second FQDN here.
+  hostname: ""
+  path: /
+  pathType: Prefix
   annotations:
     # Salidas acm_certificate_arn, waf_web_acl_arn y alb_security_group_id.
     alb.ingress.kubernetes.io/certificate-arn: "arn:aws:acm:us-east-1:911167887101:certificate/27d8dcfd-8292-4f4d-be17-69f19588d9cf"
     alb.ingress.kubernetes.io/wafv2-acl-arn: "arn:aws:wafv2:us-east-1:911167887101:regional/webacl/spin-dev-web/f416396d-c2ec-4233-a344-ac0a72b80cbf"
     alb.ingress.kubernetes.io/security-groups: "sg-0b55406a1036d29ee"
-    external-dns.alpha.kubernetes.io/hostname: "spin.ervic.pro"
-  hosts:
-    - host: "spin.ervic.pro"
-      paths:
-        - path: /
-          pathType: Prefix
 
 networkPolicy:
   enabled: true

@@ -15,6 +15,10 @@ service:
 
 ingress:
   enabled: true
+  # Set once from Terraform's application_hostname output at deploy time.
+  hostname: ""
+  path: /
+  pathType: Prefix
   className: alb
   annotations:
     alb.ingress.kubernetes.io/scheme: internet-facing
@@ -24,12 +28,6 @@ ingress:
     alb.ingress.kubernetes.io/certificate-arn: "REPLACE_WITH_ACM_ARN"
     alb.ingress.kubernetes.io/wafv2-acl-arn: "REPLACE_WITH_WAF_ACL_ARN"
     alb.ingress.kubernetes.io/security-groups: "REPLACE_WITH_ALB_SECURITY_GROUP_ID"
-    external-dns.alpha.kubernetes.io/hostname: "transaction-api.example.com"
-  hosts:
-    - host: "transaction-api.example.com"
-      paths:
-        - path: /
-          pathType: Prefix
   tls: []
 
 resources:
