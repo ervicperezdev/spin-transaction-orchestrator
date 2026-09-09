@@ -26,7 +26,8 @@ Copy `backend.hcl.example` outside the repository and replace its placeholders. 
 - EKS endpoint access is private; the permitted control-plane CIDRs must be explicitly supplied by the environment owner.
 - RDS uses encrypted storage, encrypted backups, deletion protection, a private subnet group and a security group that accepts PostgreSQL only from the EKS node security group.
 - ECR image scanning and immutable tags protect the registry boundary. Lifecycle retention is deliberately short only for untagged images.
-- The workload IAM role is separate from node roles and has no permissions by default. Add exact Secrets Manager ARNs only after a workload access review; IRSA wiring is a deployment integration step.
-- This foundation does not create DNS, ACM/WAF, secrets, observability, Kubernetes add-ons, OIDC/IRSA trust relationships, or a production CI apply path. Those are roadmap items requiring ownership and account-specific design.
+- GitHub Actions uses an OIDC-to-STS deployment role restricted to the configured repository and branch. It can push only to this ECR repository and discover only this EKS cluster; it has no static AWS keys or Secrets Manager access.
+- External Secrets Operator uses a separate IRSA role restricted to its exact service account and the exact Secrets Manager ARNs approved for synchronization. The application pod does not receive this role. See `../docs/iam-secrets-deployment-guide.md` and `../docs/adr/ADR-006-oidc-iam-and-secrets.md`.
+- This foundation does not create DNS, ACM/WAF, secret values, observability, Kubernetes add-ons, EKS OIDC provider bootstrap, EKS access entries/RBAC, or a production CI apply path. Those remain account-owned integration steps.
 
 Known risk: an apply with an overly broad `allowed_control_plane_cidrs` value could expose EKS endpoint access. Validation rejects `0.0.0.0/0`, but network approval remains required.

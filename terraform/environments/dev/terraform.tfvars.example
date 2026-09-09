@@ -6,3 +6,9 @@ database_subnet_cidrs       = ["10.42.32.0/24", "10.42.33.0/24"]
 allowed_control_plane_cidrs = ["10.0.0.0/8"] # Replace with approved admin-network ranges.
 # Do not put secret values here. Exact Secrets Manager ARNs may be supplied after review.
 workload_secret_arns = []
+# Terraform does not create secret values. Supply the exact ARN after its value
+# is created out of band by an authorized secret owner.
+# workload_secret_arns = ["arn:aws:secretsmanager:us-east-1:123456789012:secret:spin/transaction-api/dev-XXXXXX"]
+# EKS OIDC provider creation is a one-time, account-reviewed bootstrap action.
+eks_oidc_provider_arn    = "arn:aws:iam::123456789012:oidc-provider/oidc.eks.us-east-1.amazonaws.com/id/REPLACE_ME"
+eks_oidc_issuer_hostpath = "oidc.eks.us-east-1.amazonaws.com/id/REPLACE_ME"
