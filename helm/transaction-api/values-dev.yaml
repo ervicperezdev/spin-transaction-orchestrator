@@ -5,7 +5,6 @@ replicaCount: 1
 
 image:
   repository: "911167887101.dkr.ecr.us-east-1.amazonaws.com/spin-transaction-orchestrator"
-  tag: "80968b70eac9fd5ccefb8e4e8fa805fc8b389d47"
   # El pipeline debe proporcionar image.tag con el SHA de la imagen publicada.
 
 autoscaling:
