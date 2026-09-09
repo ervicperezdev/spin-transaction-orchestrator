@@ -1,9 +1,15 @@
-name: Release
+name: Production Release
 
 on:
   push:
     tags:
       - 'v*'
+  workflow_dispatch:
+    inputs:
+      ref:
+        description: 'Tag protegido v* ya integrado desde main'
+        required: true
+        type: string
 
 env:
   REGISTRY: ghcr.io
@@ -14,13 +20,30 @@ permissions:
   packages: write
   id-token: write
 
+concurrency:
+  group: production-release
+  cancel-in-progress: false
+
 jobs:
   release:
     name: Build, push, sign, and attest
     runs-on: ubuntu-latest
+    environment: production
 
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ inputs.ref || github.ref }}
+
+      - name: Validate trusted release tag
+        env:
+          RELEASE_REF: ${{ inputs.ref || github.ref_name }}
+        run: |
+          if [[ ! "$RELEASE_REF" =~ ^v[0-9]+(\.[0-9]+){1,2}([-.][0-9A-Za-z.-]+)?$ ]]; then
+            echo '::error::Production releases require a version tag beginning with v.'
+            exit 1
+          fi
+          git ls-remote --exit-code --tags origin "refs/tags/$RELEASE_REF" >/dev/null
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@37fe631027851001ddb9b187196cc803df7f5f0e # v4.3.0
@@ -39,7 +62,7 @@ jobs:
           images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
           tags: |
             type=semver,pattern={{version}}
-            type=sha,prefix=sha-
+            type=raw,value=${{ inputs.ref }},enable=${{ github.event_name == 'workflow_dispatch' }}
 
       - name: Build and push
         id: build-push
