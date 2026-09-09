@@ -21,12 +21,8 @@ resource "aws_security_group" "database" {
     protocol        = "tcp"
     security_groups = [var.allowed_security_group_id]
   }
-  egress {
-    from_port   = 0
-    to_port     = 0
-    protocol    = "-1"
-    cidr_blocks = ["0.0.0.0/0"]
-  }
+  # Database replies are stateful; it never initiates connections.
+  egress = []
 }
 
 resource "aws_db_instance" "this" {

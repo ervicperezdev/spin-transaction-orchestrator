@@ -1,6 +1,45 @@
 variable "name" { type = string }
 variable "zone_name" { type = string }
 variable "hostname" { type = string }
+variable "vpc_id" { type = string }
+variable "node_security_group_id" { type = string }
+
+resource "aws_security_group" "alb" {
+  name        = "${var.name}-alb"
+  description = "Public HTTPS ingress to the transaction API ALB"
+  vpc_id      = var.vpc_id
+  ingress {
+    description = "HTTP redirect only"
+    from_port   = 80
+    to_port     = 80
+    protocol    = "tcp"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+  ingress {
+    description = "HTTPS client traffic"
+    from_port   = 443
+    to_port     = 443
+    protocol    = "tcp"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+  egress {
+    description     = "ALB targets on the application port"
+    from_port       = 8080
+    to_port         = 8080
+    protocol        = "tcp"
+    security_groups = [var.node_security_group_id]
+  }
+}
+
+resource "aws_security_group_rule" "node_from_alb" {
+  type                     = "ingress"
+  description              = "ALB IP targets to transaction API pods"
+  from_port                = 8080
+  to_port                  = 8080
+  protocol                 = "tcp"
+  security_group_id        = var.node_security_group_id
+  source_security_group_id = aws_security_group.alb.id
+}
 
 data "aws_route53_zone" "this" {
   name         = var.zone_name
@@ -82,3 +121,4 @@ resource "aws_wafv2_web_acl" "this" {
 output "certificate_arn" { value = aws_acm_certificate_validation.this.certificate_arn }
 output "web_acl_arn" { value = aws_wafv2_web_acl.this.arn }
 output "zone_id" { value = data.aws_route53_zone.this.zone_id }
+output "alb_security_group_id" { value = aws_security_group.alb.id }

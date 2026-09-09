@@ -1,6 +1,62 @@
 variable "cluster_name" { type = string }
 variable "subnet_ids" { type = list(string) }
+variable "vpc_id" { type = string }
 variable "allowed_control_plane_cidrs" { type = list(string) }
+
+resource "aws_security_group" "node" {
+  name        = "${var.cluster_name}-node"
+  description = "EKS worker nodes; no public ingress"
+  vpc_id      = var.vpc_id
+  ingress {
+    description = "Node-to-node and pod networking"
+    from_port   = 0
+    to_port     = 0
+    protocol    = "-1"
+    self        = true
+  }
+  egress {
+    description = "Private subnet egress via NAT/VPC endpoints"
+    from_port   = 0
+    to_port     = 0
+    protocol    = "-1"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+}
+
+resource "aws_security_group" "cluster" {
+  name        = "${var.cluster_name}-cluster"
+  description = "EKS API endpoint; accepts traffic only from worker nodes"
+  vpc_id      = var.vpc_id
+  ingress {
+    description     = "Kubelet and pod API access"
+    from_port       = 443
+    to_port         = 443
+    protocol        = "tcp"
+    security_groups = [aws_security_group.node.id]
+  }
+  egress {
+    from_port   = 0
+    to_port     = 0
+    protocol    = "-1"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+}
+
+resource "aws_security_group_rule" "node_from_cluster_kubelet" {
+  type                     = "ingress"
+  description              = "Control plane to kubelet"
+  from_port                = 10250
+  to_port                  = 10250
+  protocol                 = "tcp"
+  security_group_id        = aws_security_group.node.id
+  source_security_group_id = aws_security_group.cluster.id
+}
+
+resource "aws_launch_template" "node" {
+  name_prefix            = "${var.cluster_name}-node-"
+  vpc_security_group_ids = [aws_security_group.node.id]
+  lifecycle { create_before_destroy = true }
+}
 
 resource "aws_iam_role" "cluster" {
   name               = "${var.cluster_name}-cluster"
@@ -37,6 +93,7 @@ resource "aws_eks_cluster" "this" {
 
   vpc_config {
     subnet_ids              = var.subnet_ids
+    security_group_ids      = [aws_security_group.cluster.id]
     endpoint_private_access = true
     endpoint_public_access  = false
     public_access_cidrs     = var.allowed_control_plane_cidrs
@@ -52,6 +109,10 @@ resource "aws_eks_node_group" "default" {
   node_role_arn   = aws_iam_role.node.arn
   subnet_ids      = var.subnet_ids
   capacity_type   = "ON_DEMAND"
+  launch_template {
+    id      = aws_launch_template.node.id
+    version = aws_launch_template.node.latest_version
+  }
 
   scaling_config {
     desired_size = 2
@@ -64,4 +125,5 @@ resource "aws_eks_node_group" "default" {
 
 output "cluster_name" { value = aws_eks_cluster.this.name }
 output "cluster_arn" { value = aws_eks_cluster.this.arn }
-output "node_security_group_id" { value = aws_eks_cluster.this.vpc_config[0].cluster_security_group_id }
+output "cluster_security_group_id" { value = aws_security_group.cluster.id }
+output "node_security_group_id" { value = aws_security_group.node.id }

@@ -25,3 +25,14 @@ review ACM ownership/validation, and configure the deployment Helm values with
 the `acm_certificate_arn` and `waf_web_acl_arn` outputs. A single NAT gateway
 is intentional for the development baseline; production should use one NAT
 gateway per availability zone or approved VPC endpoints.
+
+## Security groups
+
+Terraform owns all workload-facing security groups. The public ALB group allows
+only TCP/80 (redirect) and TCP/443 from the Internet, and may egress only to
+TCP/8080 on the worker-node group. The worker-node group has no public ingress;
+it accepts TCP/8080 only from the ALB group, TCP/10250 only from the cluster
+group, and node-to-node traffic through self-reference. The cluster API group
+accepts TCP/443 only from worker nodes. The RDS group accepts TCP/5432 only
+from worker nodes and has no initiating egress. These group-to-group references
+avoid stale IP allowlists and keep ownership out of the Load Balancer Controller.

@@ -18,10 +18,12 @@ module "vpc" {
 }
 
 module "edge" {
-  source    = "../../modules/edge"
-  name      = local.name
-  zone_name = var.route53_zone_name
-  hostname  = var.application_hostname
+  source                 = "../../modules/edge"
+  name                   = local.name
+  zone_name              = var.route53_zone_name
+  hostname               = var.application_hostname
+  vpc_id                 = module.vpc.vpc_id
+  node_security_group_id = module.eks.node_security_group_id
 }
 
 module "addons" {
@@ -41,6 +43,7 @@ module "ecr" {
 module "eks" {
   source                      = "../../modules/eks"
   cluster_name                = local.name
+  vpc_id                      = module.vpc.vpc_id
   subnet_ids                  = module.vpc.private_subnet_ids
   allowed_control_plane_cidrs = var.allowed_control_plane_cidrs
 }

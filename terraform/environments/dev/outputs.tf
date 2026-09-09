@@ -5,4 +5,5 @@ output "workload_role_arn" { value = module.workload_iam.role_arn }
 output "github_deploy_role_arn" { value = module.workload_iam.github_deploy_role_arn }
 output "acm_certificate_arn" { value = module.edge.certificate_arn }
 output "waf_web_acl_arn" { value = module.edge.web_acl_arn }
+output "alb_security_group_id" { value = module.edge.alb_security_group_id }
 output "load_balancer_controller_role_arn" { value = module.addons.load_balancer_controller_role_arn }
