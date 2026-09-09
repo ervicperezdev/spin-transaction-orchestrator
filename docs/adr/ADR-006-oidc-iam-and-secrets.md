@@ -6,7 +6,7 @@ La canalización de entrega debe publicar una imagen revisada en ECR y descubrir
 clúster sin almacenar claves de acceso de AWS en GitHub. Las credenciales de la solicitud deben
 no estar comprometido con Git, inyectado como variables de Terraform ni compartido con EKS
 nodos. La API de transacciones lee los valores aprobados de Secrets Manager directamente
-a través del controlador CSI de AWS Secrets Store; ningún secreto está sincronizado en
+a través del AWS Secrets Store CSI driver; ningún secreto está sincronizado en
 Kubernetes.
 ## Decisión
 Utilice dos roles de IAM independientes y una federación de identidades web:
@@ -22,7 +22,7 @@ La función de CI puede autenticarse en ECR, enviar solo al repositorio del orqu
 y llame a `eks:DescribeCluster` solo para su clúster. Acceso a la API de EKS Kubernetes
 se otorga por separado a través de entradas de acceso EKS/RBAC; no es IAM implícito
 acceso de administrador. La función IRSA de la API lee solo el ARN secreto explícito
-y el controlador CSI expone cada propiedad JSON como un archivo montado de solo lectura.
+y el AWS Secrets Store CSI driver expone cada propiedad JSON como un archivo montado de solo lectura.
 El cifrado utiliza claves administradas por AWS: RDS utiliza la clave y los secretos de RDS administrados por AWS
 El administrador usa `alias/aws/secretsmanager`. Se eliminó la clave EKS KMS personalizada;
 EKS utiliza su comportamiento de cifrado predeterminado administrado por la plataforma.

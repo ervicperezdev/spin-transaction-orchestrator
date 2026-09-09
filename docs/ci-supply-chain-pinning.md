@@ -1,5 +1,5 @@
 ## Fijación de la cadena de suministro de CI
-Las acciones de GitHub están ancladas a ID de confirmación inmutables de 40 caracteres. el cercano
+Las GitHub Actions están ancladas a ID de confirmación inmutables de 40 caracteres. el cercano
 El comentario conserva la etiqueta de lanzamiento mantenible por humanos.
 | Dependency | Selected release | Verified immutable reference |
 | --- | --- | --- |

@@ -35,7 +35,7 @@ y RDS utiliza su clave RDS administrada por AWS. No se crea ninguna clave KMS ad
 ## 3. Configurar la federación de CI
 Configure la salida de Terraform `github_deploy_role_arn` como GitHub protegido
 secreto del repositorio `AWS_DEPLOY_ROLE_ARN` y configure `AWS_REGION` como repositorio
-variable. El flujo de trabajo existente utiliza `id-token: write` e intercambia GitHub.
+variable. El workflow existente utiliza `id-token: write` e intercambia GitHub.
 token de corta duración directamente con STS. Está restringido a lo configurado.
 repositorio y `refs/heads/main`.
 Antes de habilitar la implementación, otorgue a esta función de implementación solo la entrada de acceso EKS

@@ -3,7 +3,7 @@
 **Autor:** Líder de ingeniería y seguridad
 ---
 > **Alcance:** Este documento distingue los controles del repositorio de la implementación.
-> intención. Las definiciones de Helm, Kyverno, Terraform y flujo de trabajo están versionadas en
+> intención. Las definiciones de Helm, Kyverno, Terraform y workflows están versionadas en
 > este repositorio; su aplicación en un entorno AWS/EKS no ha sido
 > verificado aquí. La validación a nivel de aplicación, el mapeo de errores y el contenedor.
 > Dockerfile se puede inspeccionar y probar localmente.
@@ -90,13 +90,13 @@ Application process  (reads mounted files; never logs secret values)
 - Claves de acceso estáticas de AWS en GitHub Actions (OIDC las elimina)
 ---
 ## Identidad y Acceso
-### CI/CD: Acciones de GitHub
+### CI/CD: GitHub Actions
 GitHub Actions se autentica en AWS mediante **OIDC** (OpenID Connect). No se almacenan claves de acceso estáticas de AWS como secretos de GitHub. La política de confianza de OIDC limita los permisos al repositorio y a la sucursal específicos, evitando la escalada de privilegios entre repositorios.
 ### Pods: IRSA (roles de IAM para cuentas de servicio)
 Cada pod asume una función de IAM vinculada a su cuenta de servicio de Kubernetes a través de IRSA. La política de rol sigue el privilegio mínimo: solo el ARN de Secrets Manager específico que el pod necesita leer y el recurso RDS específico al que se conecta. El aislamiento a nivel de pod significa que un pod comprometido no puede acceder a las credenciales de otros servicios.
 RDS y Secrets Manager utilizan claves KMS administradas por AWS; la plataforma no crea
 o administrar claves KMS de clientes para estos recursos.
-### Clúster: Controlador de admisión de Kyverno
+### Clúster: Admission controller de Kyverno
 Las políticas de Kyverno imponen invariantes de seguridad en todo el clúster:
 - Bloquear pods solicitando `privileged: true`
 - Requiere `runAsNonRoot: true` en todos los pods

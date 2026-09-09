@@ -11,7 +11,7 @@ Adoptar **Arquitectura hexagonal (puertos y adaptadores)** como patrón estructu
 Estructura:
 - `domain/` — modelo de dominio Java puro; sin dependencias del marco
 - `application/`: servicios de casos de uso e interfaces de puerto; sin JPA, sin HTTP, sin AWS
-- `adapter/in/` — adaptadores entrantes (controlador REST, consumidores)
+- `adapter/in/` — adaptadores entrantes (REST controller, consumidores)
 - `adapter/out/`: adaptadores salientes (persistencia JPA, cliente HTTP del proveedor)
 - `infrastructure/` — Cableado Spring Boot, configuración, migraciones de Flyway
 Los puertos son interfaces Java definidas en `application/port/`; los adaptadores los implementan. El núcleo de la aplicación nunca importa desde paquetes de infraestructura o adaptadores.

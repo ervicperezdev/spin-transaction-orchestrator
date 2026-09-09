@@ -4,7 +4,7 @@ Los artefactos afectados fueron inspeccionados con el árbol de dependencia de M
 después de la remediación. Jackson, Micrómetro, Tomcat, Spring Framework y Spring
 Los datos son dependencias transitivas administradas por la lista de materiales principal de Spring Boot; ninguno lo es
 declarado directamente en este proyecto. La única anulación de versión directa en el POM
-es el controlador JDBC de PostgreSQL.
+es el JDBC driver de PostgreSQL.
 El padre se actualizó de Spring Boot 3.5.14 a 3.5.16, la última versión compatible
 Versión de mantenimiento 3.5.x. Esto preserva Java 21 y permite que Spring Boot BOM
 mover el conjunto de dependencias gestionadas como una unidad coherente.

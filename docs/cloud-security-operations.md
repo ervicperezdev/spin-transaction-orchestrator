@@ -31,7 +31,7 @@ aplicación, cuando se aplica.
 - Autorizar explícitamente al rol de SOC a consultar evidencia, sin otorgarle
   permisos de modificación sobre producción de forma predeterminada.
 - Mantener Secrets Manager como fuente de verdad y Pod Identity para los
-  controladores EKS; no introducir ESO, Kubernetes Secrets ni claves AWS
+  controllers de EKS; no introducir ESO, Kubernetes Secrets ni claves AWS
   estáticas por motivos de observabilidad.
 ## Normalización y severidad
 La gravedad se asigna por impacto confirmada y contexto; la gravedad nativa

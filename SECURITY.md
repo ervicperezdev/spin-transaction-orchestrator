@@ -1,22 +1,18 @@
 # Política de seguridad
-## Informar de una vulnerabilidad
-No abra una edición pública por una vulnerabilidad sospechosa. Denúncialo
-de forma privada al propietario del repositorio con una descripción, revisión afectada,
-Pasos de reproducción y posible impacto. Evite incluir credenciales reales o
-datos de la transacción.
-El mantenedor debe reconocer el informe, evaluar la gravedad y coordinar una
-arreglar antes de la divulgación pública. Las correcciones de seguridad deberían recibir una prueba de regresión
-cuando sea práctico y se publicará a través del flujo normal de solicitud de extracción revisada.
+
+## Reporte de vulnerabilidades
+
+No abras un issue público para reportar una vulnerabilidad sospechada. Repórtala de forma privada al propietario del repositorio e incluye descripción, revisión afectada, pasos de reproducción e impacto potencial. No incluyas credenciales reales ni datos de transacciones.
+
+La persona responsable del repositorio debe confirmar la recepción, evaluar la severidad y coordinar una corrección antes de cualquier divulgación pública. Siempre que sea viable, las correcciones de seguridad deben incluir una prueba de regresión y publicarse mediante el flujo habitual de Pull Request revisado.
+
 ## Alcance admitido
-Este repositorio es una implementación de MVP/desafío. Su base de datos local predeterminada
-Las credenciales y la API no autenticada no están listas para producción. Ver
-`docs/security.md`, `docs/threat-model.md` y
-`docs/limitations-roadmap-ai.md` para controles implementados, controles previstos
-y lagunas conocidas.
-## Expectativas de desarrollo seguras
-- Nunca confirmes secretos, archivos `.env`, claves privadas o datos de transacciones reales.
-- Utilice los controles de CI suministrados como puertas de revisión; investigar los hallazgos en lugar de
-  reprimiéndolos silenciosamente.
-- Mantener las dependencias y referencias de acciones revisadas y fijadas según corresponda.
-- Trate las políticas de firma de imágenes, IaC y Kubernetes como controles que requieren
-  verificación del entorno implementado, no como un sustituto de la misma.
+
+Este repositorio es una implementación MVP para un challenge. Las credenciales predeterminadas de la base de datos local y la API sin autenticación no están preparadas para producción. Consulta `docs/security.md`, `docs/threat-model.md` y `docs/limitations-roadmap-ai.md` para conocer los controles implementados, los controles previstos y las brechas conocidas.
+
+## Expectativas de desarrollo seguro
+
+- Nunca hagas commit de secretos, archivos `.env`, private keys ni datos reales de transacciones.
+- Usa los checks de CI incluidos como gates de revisión; investiga los hallazgos en lugar de suprimirlos silenciosamente.
+- Mantén revisadas y correctamente fijadas las dependencias y referencias de GitHub Actions.
+- Considera image signing, políticas de IaC y políticas de Kubernetes como controles que requieren verificación en el entorno desplegado; no son un sustituto de ella.

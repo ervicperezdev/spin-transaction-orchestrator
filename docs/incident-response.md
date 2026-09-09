@@ -72,7 +72,7 @@ Detect → Triage → Contain → Eradicate → Recover → Lessons Learned
 - En caso de fraude: congelar los `accountId` afectados en espera de revisión manual.
 ### 6. Recuperación
 - Verificar el estado del pod: todas las réplicas `Running`, sondas de preparación aprobadas.
-- Confirme que el disyuntor esté en `CLOSED` (estado saludable) antes de volver a habilitar el tráfico total.
+- Confirme que el circuit breaker esté en `CLOSED` (estado saludable) antes de volver a habilitar el tráfico total.
 - Ajustar la regla de tarifas WAF para reflejar la línea base de tráfico confirmado.
 - Monitoree `transaction_success_total` y `transaction_rejected_total` durante 30 minutos después de la recuperación.
 ### 7. Post mortem

@@ -9,7 +9,7 @@ La estrategia está documentada en `docs/cloud-security-operations.md`. También
 solo diseño: sin seguimiento de auditoría, agregador de búsqueda, destino de registro o enrutamiento SOC
 es proporcionado por este repositorio.
 Secrets Manager es la fuente de confianza para las credenciales. Valores secretos montados por
-el controlador CSI de AWS Secrets Store, las credenciales del proveedor de pagos, los ID de transacciones,
+el AWS Secrets Store CSI driver, las credenciales del proveedor de pagos, los ID de transacciones,
 claves de idempotencia, referencias de proveedores, importes, monedas, solicitud/respuesta
 Los cuerpos y los motivos de rechazo están prohibidos en registros, métricas y seguimientos.
 ## Señales de aplicación
@@ -38,7 +38,7 @@ AWS Load Balancer Controller y ExternalDNS conservan EKS Pod Identity. Cualquier
 La futura integración de telemetría no debe ampliar esos roles ni utilizar aplicaciones.
 secretos como credenciales de telemetría.
 ## Guía del operador
-Restringir el acceso del Actuador a la red de operaciones/clúster; no es publico
+Restringir el acceso del Actuator a la red de operaciones/clúster; no es publico
 API. Cree paneles y alertas a partir del catálogo anterior únicamente con etiquetas delimitadas.
 Como mínimo, página sobre indisponibilidad sostenida de proveedores, objetivos insalubres de ALB,
 Agotamiento de recursos RDS, aumentos repentinos de bloques WAF y certificados ACM que caducan. sintonizar

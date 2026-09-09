@@ -24,7 +24,7 @@ con ACM) → AWS Load Balancer Controller → Kubernetes Service → pods. El
 controller y ExternalDNS usan EKS Pod Identity; los detalles están en
 `docs/edge-architecture.md`.
 El repositorio contiene plantillas de Helm, políticas de Kyverno, Terraform y GitHub.
-Definiciones de flujo de trabajo de acciones. Son artefactos desplegables, no evidencia de que
+definiciones de workflows de GitHub Actions. Son artefactos desplegables, no evidencia de que
 una cuenta de AWS, un clúster de EKS, un WAF, una instancia de RDS, una pila de monitoreo o una admisión
 El controlador está actualmente ejecutándose. Esos controles ambientales deben verificarse.
 en el momento del despliegue.
@@ -38,4 +38,4 @@ El fundamento de las principales opciones se encuentra en `docs/adr/`:
 - ADR-002 — PostgreSQL y almacenamiento decimal exacto.
 - ADR-003: claves de idempotencia proporcionadas por el cliente.
 - ADR-004: EKS como opción de implementación de Kubernetes prevista.
-- ADR-005: la política de reintento/disyuntor es una decisión de la hoja de ruta, no el código actual.
+- ADR-005: la política de retry/circuit breaker es una decisión de la hoja de ruta, no el código actual.

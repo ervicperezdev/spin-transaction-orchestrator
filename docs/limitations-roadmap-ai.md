@@ -7,7 +7,7 @@
 - La idempotencia es opcional. Una clave duplicada devuelve una transacción almacenada, pero una
   llamada al proveedor que tiene éxito antes de que la aplicación persista, el resultado permanece
   un estado ambiguo y aún puede conducir a una operación externa duplicada.
-- Las llamadas de proveedores utilizan tiempos de espera de conexión/lectura configurados. Sin reintento, circuito
+- Las llamadas de proveedores utilizan tiempos de espera de conexión/lectura configurados. Sin retry, circuito
   interruptor, trabajador de conciliación, seguimiento de auditoría, exportación de métricas o alertas.
   implementado en la aplicación.
 - Las credenciales de PostgreSQL Docker Compose son predeterminadas solo para desarrollo.
@@ -16,7 +16,7 @@
 1. Agregue autenticación OAuth2/JWT, política de autorización y un modelo de eventos de auditoría.
 2. Conservar un registro de operación/bandeja de salida antes de la interacción con el proveedor y crear un
    proceso de conciliación para resultados ambiguos del proveedor.
-3. Agregue propagación de idempotencia específica del proveedor, clasificación de reintento seguro,
+3. Agregue propagación de idempotencia específica del proveedor, clasificación de retry seguro,
    corte de circuito y métricas/alertas operativas.
 4. Proveer y verificar los controles AWS/EKS/RDS representados por el IaC y
    Artefactos de Helm, incluidos TLS, aplicación de NetworkPolicy, IRSA y secretos

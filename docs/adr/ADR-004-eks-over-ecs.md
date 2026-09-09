@@ -13,7 +13,7 @@ El entorno EKS existe actualmente.
 El principal impulsor de este contexto es la capacidad de demostrar toda la amplitud de los controles de seguridad de Kubernetes:
 - `NetworkPolicy` para la segmentación del tráfico a nivel de pod (denegar todo por defecto, reglas de permiso explícitas)
 - `PodSecurityContext` con `runAsNonRoot`, `readOnlyRootFilesystem`, `seccompProfile: RuntimeDefault`
-- Controlador de admisión **Kyverno** que aplica políticas de seguridad en todo el clúster (bloquea pods privilegiados, aplica política de extracción de imágenes, exige límites de recursos)
+- Admission controller **Kyverno** que aplica políticas de seguridad en todo el clúster (bloquea pods privilegiados, aplica política de extracción de imágenes, exige límites de recursos)
 - **IRSA** (roles de IAM para cuentas de servicio) para acceso a la API de AWS con privilegios mínimos sin credenciales a nivel de nodo
 - **Helm** para implementaciones reproducibles y controladas por versiones
 - **HPA** (Horizontal Pod Autoscaler) para escalado basado en carga

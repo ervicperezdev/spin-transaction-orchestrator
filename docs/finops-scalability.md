@@ -47,7 +47,7 @@ Antes de aumentar `maxReplicas`, calcule el límite de conexión de la base de d
 Establecer un grupo Hikari conservador explícitamente para la clase RDS elegida, reservar
 conexiones para operaciones y migraciones, y latencia del proveedor de pruebas de carga.
 Se prefieren la contrapresión, los tiempos de espera y la interrupción del circuito a los grupos ilimitados.
-o reintentos incontrolados. PDB `minAvailable: 2` protege una réplica de tres
+o retrys incontrolados. PDB `minAvailable: 2` protege una réplica de tres
 despliegue de producción durante interrupciones voluntarias; revisarlo junto con
 objetivos de disponibilidad y recuento de réplicas.
 Las revisiones de capacidad utilizan latencia p95/p99, tasa de error, aceleración de la CPU y memoria.
@@ -56,7 +56,7 @@ recursos asignables/solicitados, conexiones RDS/latencia/almacenamiento y NAT/WA
 volumen de registro. Se acepta un cambio sólo cuando mejora un cuello de botella medido.
 sin vulnerar la base de datos ni los presupuestos de los proveedores.
 ## Datos y evolución asincrónica
-El punto final del historial de transacciones ya utiliza paginación de conjunto de claves determinista
+El endpoint del historial de transacciones ya utiliza paginación de conjunto de claves determinista
 (`createdAt DESC, id DESC`) y tiene un índice de base de datos coincidente. Guárdalo en su lugar
 de paginación desplazada a medida que la tabla crece: evita el escaneo progresivo y
 descartando páginas anteriores y es estable cuando llegan nuevas transacciones.

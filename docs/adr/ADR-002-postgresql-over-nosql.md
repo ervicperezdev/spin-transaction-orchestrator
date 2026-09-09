@@ -13,7 +13,7 @@ Instancia RDS.
 Opciones clave de implementación:
 - Montos monetarios almacenados como `NUMERIC(19,2)`, nunca `FLOAT` o `DOUBLE`, que introducen errores de redondeo binarios de punto flotante inaceptables en los cálculos financieros.
 - `BigDecimal` utilizado en todo el modelo de dominio Java; nunca `double` o `float`.
-- La columna `idempotency_key` lleva una restricción `UNIQUE` aplicada en el nivel de la base de datos, lo que evita duplicados incluso en reintentos simultáneos.
+- La columna `idempotency_key` lleva una restricción `UNIQUE` aplicada en el nivel de la base de datos, lo que evita duplicados incluso en retrys simultáneos.
 - RDS implementado en una subred privada con modo de espera Multi-AZ para alta disponibilidad.
 - Flyway gestiona todas las migraciones de esquemas con scripts SQL controlados por versión revisados ​​en PR.
 ---
