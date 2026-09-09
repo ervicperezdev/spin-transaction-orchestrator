@@ -7,6 +7,7 @@ MVP backend for transaction orchestration. It uses Java 21, Spring Boot, Maven a
 - Architecture and decision records: `docs/architecture.md` and `docs/adr/`
 - Versioned OpenAPI source: `docs/openapi.yaml` (the running app exposes `/v3/api-docs`)
 - Security model and known risks: `docs/security.md`, `docs/threat-model.md` and `SECURITY.md`
+- Signal catalog and operational boundary: `docs/observability.md`
 - Current limitations, roadmap and AI-use statement: `docs/limitations-roadmap-ai.md`
 
 ## Prerequisites
@@ -40,8 +41,8 @@ Local operational and API documentation URLs:
 - OpenAPI JSON: `http://localhost:8080/v3/api-docs`
 - Swagger UI: `http://localhost:8080/swagger-ui/index.html`
 
-Only the Actuator health endpoint is exposed. Its response does not include health
-component details or application configuration values.
+Only the Actuator health and metrics endpoints are exposed. Health does not include
+component details; configuration endpoints such as `/actuator/env` remain unavailable.
 
 Stop the local database while preserving data:
 

@@ -13,6 +13,8 @@ import com.spin.transactionorchestrator.application.port.out.PaymentProviderResu
 import com.spin.transactionorchestrator.application.port.out.PaymentProviderUnavailableException;
 import com.spin.transactionorchestrator.domain.model.Transaction;
 import com.spin.transactionorchestrator.domain.model.TransactionType;
+import com.spin.transactionorchestrator.infrastructure.observability.PaymentProviderMetrics;
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import java.math.BigDecimal;
 import java.time.Duration;
 import java.time.Instant;
@@ -35,7 +37,8 @@ class HttpPaymentProviderIntegrationTest {
         transaction = Transaction.pending(TransactionType.DEBIT, new BigDecimal("25.50"), Currency.getInstance("MXN"), Instant.EPOCH, null);
         SimpleClientHttpRequestFactory requestFactory = new SimpleClientHttpRequestFactory();
         requestFactory.setReadTimeout(Duration.ofSeconds(2));
-        adapter = new HttpPaymentProvider(RestClient.builder().baseUrl(provider.baseUrl()).requestFactory(requestFactory).build(), Duration.ofMillis(100));
+        adapter = new HttpPaymentProvider(RestClient.builder().baseUrl(provider.baseUrl()).requestFactory(requestFactory).build(),
+                Duration.ofMillis(100), new PaymentProviderMetrics(new SimpleMeterRegistry()));
     }
 
     @AfterEach
@@ -102,6 +105,6 @@ class HttpPaymentProviderIntegrationTest {
             .requestFactory(requestFactory)
             .build();
 
-    return new HttpPaymentProvider(restClient, timeout);
+    return new HttpPaymentProvider(restClient, timeout, new PaymentProviderMetrics(new SimpleMeterRegistry()));
 }
 }
