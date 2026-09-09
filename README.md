@@ -2,6 +2,13 @@
 
 MVP backend for transaction orchestration. It uses Java 21, Spring Boot, Maven and PostgreSQL.
 
+## Documentation
+
+- Architecture and decision records: `docs/architecture.md` and `docs/adr/`
+- Versioned OpenAPI source: `docs/openapi.yaml` (the running app exposes `/v3/api-docs`)
+- Security model and known risks: `docs/security.md`, `docs/threat-model.md` and `SECURITY.md`
+- Current limitations, roadmap and AI-use statement: `docs/limitations-roadmap-ai.md`
+
 ## Prerequisites
 
 - JDK 21

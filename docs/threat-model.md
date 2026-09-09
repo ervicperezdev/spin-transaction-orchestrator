@@ -6,6 +6,11 @@
 
 ---
 
+> **Scope:** This is a design-time threat model. Entries describing WAF, ALB,
+> EKS, RDS, IRSA, Kyverno, CloudTrail or certificate pinning are target or
+> roadmap controls unless verified in a deployed environment; they are not a
+> claim that those services are active.
+
 ## System Overview
 
 Text-based Data Flow Diagram:

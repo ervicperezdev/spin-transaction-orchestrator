@@ -14,7 +14,9 @@ Financial transactions are the core domain entity of this service. The storage l
 
 ## Decision
 
-Use **PostgreSQL** (deployed as Amazon RDS) as the primary data store.
+Use **PostgreSQL** as the primary data store. Amazon RDS is the intended managed
+production deployment option; this repository does not demonstrate a deployed
+RDS instance.
 
 Key implementation choices:
 - Monetary amounts stored as `NUMERIC(19,2)` — never `FLOAT` or `DOUBLE`, which introduce binary floating-point rounding errors unacceptable in financial calculations.
