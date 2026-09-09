@@ -28,6 +28,14 @@ spec:
       volumes:
         - name: tmp
           emptyDir: {}
+        {{- if .Values.secretsManager.enabled }}
+        - name: aws-secrets
+          csi:
+            driver: secrets-store.csi.k8s.io
+            readOnly: true
+            volumeAttributes:
+              secretProviderClass: {{ include "transaction-api.fullname" . }}-aws-secrets
+        {{- end }}
       containers:
         - name: {{ .Chart.Name }}
           securityContext:
@@ -41,6 +49,11 @@ spec:
           volumeMounts:
             - name: tmp
               mountPath: /tmp
+            {{- if .Values.secretsManager.enabled }}
+            - name: aws-secrets
+              mountPath: /mnt/secrets-store
+              readOnly: true
+            {{- end }}
           env:
             - name: SPRING_DATASOURCE_URL
               valueFrom:
@@ -57,22 +70,9 @@ spec:
                 configMapKeyRef:
                   name: {{ include "transaction-api.fullname" . }}-config
                   key: SERVER_PORT
-            {{- if .Values.externalSecret.enabled }}
-            - name: SPRING_DATASOURCE_USERNAME
-              valueFrom:
-                secretKeyRef:
-                  name: {{ include "transaction-api.fullname" . }}-secret
-                  key: db-username
-            - name: SPRING_DATASOURCE_PASSWORD
-              valueFrom:
-                secretKeyRef:
-                  name: {{ include "transaction-api.fullname" . }}-secret
-                  key: db-password
-            - name: PAYMENT_PROVIDER_API_KEY
-              valueFrom:
-                secretKeyRef:
-                  name: {{ include "transaction-api.fullname" . }}-secret
-                  key: payment-provider-api-key
+            {{- if .Values.secretsManager.enabled }}
+            - name: SPRING_CONFIG_IMPORT
+              value: optional:configtree:/mnt/secrets-store/
             {{- end }}
           startupProbe:
             httpGet:

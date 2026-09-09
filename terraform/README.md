@@ -26,7 +26,8 @@ Copy `backend.hcl.example` outside the repository and replace its placeholders. 
 - EKS endpoint access is private; the permitted control-plane CIDRs must be explicitly supplied by the environment owner.
 - RDS uses encrypted storage, encrypted backups, deletion protection, a private subnet group and a security group that accepts PostgreSQL only from the EKS node security group.
 - ECR image scanning and immutable tags protect the registry boundary. Lifecycle retention is deliberately short only for untagged images.
-- The workload IAM role is separate from node roles and has no permissions by default. Add exact Secrets Manager ARNs only after a workload access review; IRSA wiring is a deployment integration step.
-- This foundation does not create DNS, ACM/WAF, secrets, observability, Kubernetes add-ons, OIDC/IRSA trust relationships, or a production CI apply path. Those are roadmap items requiring ownership and account-specific design.
+- GitHub Actions uses an OIDC-to-STS deployment role restricted to the configured repository and branch. It can push only to this ECR repository and discover only this EKS cluster; it has no static AWS keys or Secrets Manager access.
+- The transaction API uses a separate IRSA role restricted to its exact service account and the exact Secrets Manager ARNs it mounts through the AWS Secrets Store CSI driver. No Kubernetes Secret copy is created. Secrets Manager and RDS use AWS-managed KMS keys; no customer-managed KMS key is created. See `../docs/iam-secrets-deployment-guide.md` and `../docs/adr/ADR-006-oidc-iam-and-secrets.md`.
+- Terraform creates public/private edge routing, DNS-validated ACM, a regional WAF ACL, the EKS Pod Identity Agent, AWS Load Balancer Controller, and ExternalDNS. See `../docs/edge-architecture.md`. It does not create secret values, observability, the Secrets Store CSI driver/provider add-on, EKS OIDC provider bootstrap, EKS access entries/RBAC, or a production CI apply path.
 
 Known risk: an apply with an overly broad `allowed_control_plane_cidrs` value could expose EKS endpoint access. Validation rejects `0.0.0.0/0`, but network approval remains required.

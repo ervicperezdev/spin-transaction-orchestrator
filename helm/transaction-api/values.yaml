@@ -19,6 +19,12 @@ ingress:
     kubernetes.io/ingress.class: alb
     alb.ingress.kubernetes.io/scheme: internet-facing
     alb.ingress.kubernetes.io/target-type: ip
+    alb.ingress.kubernetes.io/listen-ports: '[{"HTTP": 80}, {"HTTPS": 443}]'
+    alb.ingress.kubernetes.io/ssl-redirect: "443"
+    alb.ingress.kubernetes.io/certificate-arn: "REPLACE_WITH_ACM_ARN"
+    alb.ingress.kubernetes.io/wafv2-acl-arn: "REPLACE_WITH_WAF_ACL_ARN"
+    alb.ingress.kubernetes.io/security-groups: "REPLACE_WITH_ALB_SECURITY_GROUP_ID"
+    external-dns.alpha.kubernetes.io/hostname: "transaction-api.example.com"
   hosts:
     - host: "transaction-api.example.com"
       paths:
@@ -45,7 +51,8 @@ pdb:
 
 serviceAccount:
   create: true
-  annotations: {}  # Add eks.amazonaws.com/role-arn: <role-arn> for IRSA
+  annotations: {}
+  roleArn: "" # Set to Terraform workload_role_arn for direct Secrets Manager access.
   name: ""
 
 podAnnotations: {}
@@ -68,14 +75,13 @@ config:
   paymentProviderBaseUrl: "https://REPLACE_WITH_PROVIDER_URL"
   serverPort: "8080"
 
-externalSecret:
+secretsManager:
   enabled: true
-  secretStoreRef: aws-secrets-manager
-  refreshInterval: 1h
-  remoteRef:
-    key: spin/transaction-api/prod
+  region: "us-east-1"
+  secretArn: "REPLACE_WITH_SECRETS_MANAGER_ARN"
 
 networkPolicy:
   enabled: true
-  ingressControllerNamespace: ingress-nginx
+  # Replace with the application VPC CIDR(s); ALB IP targets connect directly to pods.
+  albSourceCidrs: ["10.42.0.0/16"]
   postgresqlPort: 5432

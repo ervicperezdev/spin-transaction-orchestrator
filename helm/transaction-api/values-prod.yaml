@@ -21,9 +21,9 @@ config:
   paymentProviderBaseUrl: "https://REPLACE_WITH_PROVIDER_URL"
   serverPort: "8080"
 
-externalSecret:
-  remoteRef:
-    key: spin/transaction-api/prod
+secretsManager:
+  region: "us-east-1"
+  secretArn: "REPLACE_WITH_SECRETS_MANAGER_ARN"
 
 ingress:
   annotations:
@@ -32,6 +32,8 @@ ingress:
     alb.ingress.kubernetes.io/target-type: ip
     alb.ingress.kubernetes.io/ssl-redirect: "443"
     alb.ingress.kubernetes.io/certificate-arn: "REPLACE_WITH_ACM_ARN"
+    alb.ingress.kubernetes.io/wafv2-acl-arn: "REPLACE_WITH_WAF_ACL_ARN"
+    external-dns.alpha.kubernetes.io/hostname: "transaction-api.example.com"
   hosts:
     - host: "transaction-api.example.com"
       paths:

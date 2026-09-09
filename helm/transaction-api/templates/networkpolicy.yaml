@@ -14,7 +14,7 @@ spec:
     - Ingress
     - Egress
 ---
-# Allow ingress from ALB/ingress-controller namespace on port 8080
+# In IP target mode the ALB connects directly to pod IPs from its VPC ENIs.
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
 metadata:
@@ -29,9 +29,10 @@ spec:
     - Ingress
   ingress:
     - from:
-        - namespaceSelector:
-            matchLabels:
-              kubernetes.io/metadata.name: {{ .Values.networkPolicy.ingressControllerNamespace }}
+        {{- range .Values.networkPolicy.albSourceCidrs }}
+        - ipBlock:
+            cidr: {{ . | quote }}
+        {{- end }}
       ports:
         - protocol: TCP
           port: 8080

@@ -14,3 +14,4 @@ resource "aws_ecr_lifecycle_policy" "this" {
 }
 
 output "repository_url" { value = aws_ecr_repository.this.repository_url }
+output "repository_arn" { value = aws_ecr_repository.this.arn }

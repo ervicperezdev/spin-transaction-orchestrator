@@ -17,9 +17,9 @@ config:
   paymentProviderBaseUrl: "https://sandbox.REPLACE_WITH_PROVIDER_URL"
   serverPort: "8080"
 
-externalSecret:
-  remoteRef:
-    key: spin/transaction-api/dev
+secretsManager:
+  region: "us-east-1"
+  secretArn: "REPLACE_WITH_SECRETS_MANAGER_ARN"
 
 ingress:
   hosts:

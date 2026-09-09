@@ -25,6 +25,11 @@ key, call the configured provider, transition the transaction to `APPROVED` or
 
 ## Deployment intent vs. present evidence
 
+The intended internet edge is Route 53 → WAF-protected ALB (HTTPS terminated
+with ACM) → AWS Load Balancer Controller → Kubernetes Service → pods. The
+controller and ExternalDNS use EKS Pod Identity; details are in
+`docs/edge-architecture.md`.
+
 The repository contains Helm templates, Kyverno policies, Terraform and GitHub
 Actions workflow definitions. They are deployable artifacts, not evidence that
 an AWS account, EKS cluster, WAF, RDS instance, monitoring stack or admission
@@ -33,7 +38,8 @@ at deployment time.
 
 The container image is built from a Maven stage and runs the packaged JAR as the
 distroless image's `nonroot` user. Helm also declares probes, resource values,
-a security context and optional External Secrets / NetworkPolicy templates.
+a security context, AWS Secrets Store CSI `SecretProviderClass`, and
+NetworkPolicy templates.
 
 ## Decision records
 

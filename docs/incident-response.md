@@ -116,8 +116,8 @@ Detect → Triage → Contain → Eradicate → Recover → Lessons Learned
 
 3. **Rotate in AWS Secrets Manager:**
    - Update the affected secret in AWS Secrets Manager.
-   - Trigger External Secrets Operator reconciliation to push new value to K8s Secret.
-   - Perform rolling restart of affected pods to pick up new credentials.
+   - Verify the rotated version is readable from Secrets Manager by the API IRSA role.
+   - Perform rolling restart of affected pods to remount and reload credentials.
 
 4. **Audit CloudTrail:**
    - Search for API calls using the revoked credential in the window from commit time to revocation.
