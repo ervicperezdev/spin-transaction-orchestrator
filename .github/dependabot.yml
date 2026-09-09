@@ -7,6 +7,10 @@ updates:
     directory: /
     schedule:
       interval: weekly
+    cooldown:
+      default-days: 7
+
+  # Dependabot understands full-SHA Action references and updates their pins.
     open-pull-requests-limit: 5
 
   # Keep GitHub Actions pinned to their latest patch releases. This prevents
@@ -15,6 +19,9 @@ updates:
     directory: /
     schedule:
       interval: weekly
+    cooldown:
+      default-days: 7
+
 
   # Keep the base image in Dockerfile updated so security patches in the JRE
   # layer are pulled in automatically rather than waiting for manual bumps.
@@ -22,3 +29,5 @@ updates:
     directory: /
     schedule:
       interval: weekly
+    cooldown:
+      default-days: 7
