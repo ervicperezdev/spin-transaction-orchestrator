@@ -61,18 +61,23 @@ mantiene configurada para que una aprobación opcional no sobreviva a cambios
 del `HEAD`. La regla también se aplica a administradores para que no haya una
 ruta de bypass silenciosa.
 
-El único check requerido es **`Quality Gate`**, producido por
-[`PR Validation`](../.github/workflows/pr-validation.yml). Es un agregador que
-falla si fallan compilación, pruebas, Gitleaks, Semgrep, Trivy SCA o Hadolint.
-Usar este nombre exacto evita acoplar la regla a jobs internos y a checks que
-no se ejecutan para todos los PR.
+Todos los checks que se ejecutan para cada PR a `main` son requeridos antes del
+merge. Los nombres exactos configurados son: **`Compile`**, **`Unit &
+Integration Tests`**, **`Gitleaks – Secret Scan`**, **`Semgrep – SAST`**,
+**`Trivy – SCA (Dependency Scan)`**, **`Checkov – IaC Scan`**, **`Helm Lint`**,
+**`Hadolint – Dockerfile Lint`**, **`Quality Gate`**, **`Lint Dockerfile`** y
+**`Scan container image`**. Los nueve primeros proceden de
+[`PR Validation`](../.github/workflows/pr-validation.yml), y los dos últimos
+de [`Container security`](../.github/workflows/container-security.yml).
+`Quality Gate` se mantiene como agregador defensivo de los controles críticos;
+los checks individuales hacen visible y obligatorio cada resultado en GitHub.
 
 ### Inventario de GitHub Actions
 
 | Workflow | Archivo | Disparador | Permisos declarados | Rol frente al merge |
 | --- | --- | --- | --- | --- |
-| PR Validation | [`.github/workflows/pr-validation.yml`](../.github/workflows/pr-validation.yml) | `pull_request` a `main` | `contents: read` | **Gate requerido:** `Quality Gate`; agrega Compile, Unit & Integration Tests, Gitleaks, Semgrep, Trivy SCA y Hadolint. Checkov y Helm Lint informan pero hoy usan `soft-fail` o se omiten si no hay archivos. |
-| Container security | [`.github/workflows/container-security.yml`](../.github/workflows/container-security.yml) | `pull_request` y `push` a `main` | `contents: read` | Validación complementaria (Hadolint, imagen con Trivy y SBOM). No es requerida para no duplicar el gate y porque su resultado no es el agregador estable del PR. |
+| PR Validation | [`.github/workflows/pr-validation.yml`](../.github/workflows/pr-validation.yml) | `pull_request` a `main` | `contents: read` | **Checks requeridos:** Compile, Unit & Integration Tests, Gitleaks, Semgrep, Trivy SCA, Checkov, Helm Lint, Hadolint y Quality Gate. Checkov conserva `soft-fail` en sus escaneos y Helm Lint puede omitir el paso si no hay chart, pero sus jobs deben completar correctamente. |
+| Container security | [`.github/workflows/container-security.yml`](../.github/workflows/container-security.yml) | `pull_request` y `push` a `main` | `contents: read` | **Checks requeridos en PR:** Lint Dockerfile y Scan container image; además genera SBOM. |
 | Terraform static validation | [`.github/workflows/terraform.yml`](../.github/workflows/terraform.yml) | PR y push a `main`, sólo cambios `terraform/**` | `contents: read` | Operativa/específica de ruta; no puede ser requerida globalmente porque no corre en todos los PR. |
 | Build & Release | [`.github/workflows/build-release.yml`](../.github/workflows/build-release.yml) | `push` a `main` | `contents: read`, `id-token: write` | Posterior al merge: empaqueta, escanea, genera SBOM, publica/firma en ECR y despliega a EKS. No es gate de merge. |
 | Release | [`.github/workflows/release.yml`](../.github/workflows/release.yml) | tag `v*` | `contents: read`, `packages: write`, `id-token: write` | Posterior a la integración: publica, firma y atestigua una imagen de release. No es gate de merge. |
@@ -87,6 +92,9 @@ repositorio de propietario único; se debe restablecer al menos una aprobación
 externa al incorporar colaboradores con capacidad de revisión.
 Los workflows de publicación/despliegue se mantienen fuera del merge gate
 porque dependen de AWS/ECR/EKS y sólo se ejecutan tras `push` a `main`.
-Cualquier cambio a la regla, al nombre del check requerido o a sus triggers
-debe revisarse junto con esta documentación para evitar bloquear PRs válidos o
-dejar cambios sin validación.
+Cualquier cambio a la regla, a los nombres de checks requeridos o a sus
+triggers debe revisarse junto con esta documentación. GitHub no ofrece una
+regla comodín segura para "todo check futuro": al agregar, renombrar o quitar
+un job que corra en cada PR se debe actualizar explícitamente esta lista. Los
+workflows con filtros de ruta, de `push` o de tags no se incluyen para evitar
+bloquear PRs válidos en los que no se ejecutan.
