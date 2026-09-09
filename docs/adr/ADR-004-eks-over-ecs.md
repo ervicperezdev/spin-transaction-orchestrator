@@ -14,7 +14,9 @@ The transaction orchestrator must be deployed on a container orchestration platf
 
 ## Decision
 
-Deploy on **Amazon EKS** with managed node groups.
+Target **Amazon EKS** with managed node groups when the infrastructure is
+provisioned. This ADR records an intended platform choice, not a claim that an
+EKS environment currently exists.
 
 The primary driver for this context is the ability to demonstrate the full breadth of Kubernetes security controls:
 - `NetworkPolicy` for pod-level traffic segmentation (deny-all default, explicit allow rules)

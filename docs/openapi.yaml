@@ -1,0 +1,76 @@
+openapi: 3.0.3
+info:
+  title: Spin Transaction Orchestrator API
+  version: v1
+  description: Versioned source contract. The running application also exposes /v3/api-docs.
+paths:
+  /transactions:
+    post:
+      summary: Execute a transaction
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/CreateTransactionRequest'}
+      responses:
+        '201': {description: Transaction processed, content: {application/json: {schema: {$ref: '#/components/schemas/Transaction'}}}}
+        '400': {$ref: '#/components/responses/BadRequest'}
+        '409': {$ref: '#/components/responses/BusinessRule'}
+        '422': {$ref: '#/components/responses/ValidationRule'}
+        '503': {$ref: '#/components/responses/ProviderUnavailable'}
+    get:
+      summary: List transactions
+      parameters:
+        - {name: page, in: query, schema: {type: integer, minimum: 0, default: 0}}
+        - {name: size, in: query, schema: {type: integer, minimum: 1, maximum: 100, default: 20}}
+        - {name: status, in: query, schema: {$ref: '#/components/schemas/TransactionStatus'}}
+        - {name: type, in: query, schema: {$ref: '#/components/schemas/TransactionType'}}
+      responses:
+        '200': {description: Stable-order page, content: {application/json: {schema: {$ref: '#/components/schemas/TransactionPage'}}}}
+        '400': {$ref: '#/components/responses/BadRequest'}
+components:
+  parameters:
+    IdempotencyKey: {name: Idempotency-Key, in: header, required: false, schema: {type: string}, description: Client key for safe retries.}
+  responses:
+    BadRequest: {description: Invalid request or query parameter, content: {application/json: {schema: {$ref: '#/components/schemas/ApiError'}}}}
+    BusinessRule: {description: Transaction state conflict, content: {application/json: {schema: {$ref: '#/components/schemas/ApiError'}}}}
+    ValidationRule: {description: Domain validation failure, content: {application/json: {schema: {$ref: '#/components/schemas/ApiError'}}}}
+    ProviderUnavailable: {description: Provider unavailable or response unusable, content: {application/json: {schema: {$ref: '#/components/schemas/ApiError'}}}}
+  schemas:
+    CreateTransactionRequest:
+      type: object
+      required: [type, amount, currency]
+      properties:
+        type: {$ref: '#/components/schemas/TransactionType'}
+        amount: {type: number, minimum: 1.01, example: 25.50}
+        currency: {type: string, pattern: '^[A-Z]{3}$', example: MXN}
+    Transaction:
+      type: object
+      required: [id, type, amount, currency, status, createdAt]
+      properties:
+        id: {type: string, format: uuid}
+        type: {$ref: '#/components/schemas/TransactionType'}
+        amount: {type: number}
+        currency: {type: string, example: MXN}
+        status: {$ref: '#/components/schemas/TransactionStatus'}
+        createdAt: {type: string, format: date-time}
+    TransactionPage:
+      type: object
+      required: [items, page, size, totalItems, totalPages]
+      properties:
+        items: {type: array, items: {$ref: '#/components/schemas/Transaction'}}
+        page: {type: integer, minimum: 0}
+        size: {type: integer, minimum: 1, maximum: 100}
+        totalItems: {type: integer, format: int64}
+        totalPages: {type: integer}
+    TransactionType: {type: string, enum: [DEBIT, CREDIT]}
+    TransactionStatus: {type: string, enum: [PENDING, APPROVED, REJECTED]}
+    ApiError:
+      type: object
+      required: [code, message, violations]
+      properties:
+        code: {type: string, example: VALIDATION_ERROR}
+        message: {type: string, example: Request validation failed}
+        violations: {type: array, items: {type: object, properties: {field: {type: string}, message: {type: string}}}}

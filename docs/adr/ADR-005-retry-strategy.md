@@ -1,6 +1,6 @@
 # ADR-005: Resilience4j Retry and Circuit Breaker Strategy
 
-**Status:** Accepted
+**Status:** Proposed
 **Date:** 2026-09-08
 **Author:** Engineering & Security Lead
 
@@ -19,7 +19,10 @@ The retry strategy must distinguish between error classes where retry is safe, a
 
 ## Decision
 
-Use **Resilience4j** for timeout, retry, and circuit breaker controls on all outbound provider calls.
+Adopt the following retry and circuit-breaker policy when Resilience4j (or an
+equivalent) is introduced. It is not implemented in the current application.
+Today the HTTP adapter only applies the configured connection/read timeouts and
+maps provider failures to `PaymentProviderUnavailableException`.
 
 ### Configuration
 

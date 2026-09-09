@@ -5,9 +5,17 @@
 
 ---
 
+> **Scope:** This document distinguishes repository controls from deployment
+> intent. Helm, Kyverno, Terraform and workflow definitions are versioned in
+> this repository; their enforcement in an AWS/EKS environment has not been
+> verified here. The application-level validation, error mapping and container
+> Dockerfile can be inspected and tested locally.
+
 ## Defense-in-Depth Layers
 
-The system applies security controls at every layer of the stack. No single control is treated as sufficient; each layer assumes the previous one can be bypassed.
+The target deployment applies security controls at every layer of the stack. No
+single control is treated as sufficient; each layer assumes the previous one can
+be bypassed.
 
 ```
 Internet
