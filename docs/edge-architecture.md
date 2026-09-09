@@ -1,4 +1,33 @@
 # Complementos de Internet Edge y EKS
+
+## Conectividad del webhook de Load Balancer Controller
+
+El API de EKS llama al Service `aws-load-balancer-webhook-service` en
+`kube-system` por HTTPS/443; el Service dirige la solicitud al puerto TCP/9443
+del pod. Terraform permite ese puerto en el security group de los nodos,
+exclusivamente desde el security group del control plane. Es un recorrido
+interno, independiente del acceso del runner al endpoint público de EKS.
+
+Si Helm informa `failed calling webhook` con `context deadline exceeded`,
+verifique como administrador después de aplicar la regla:
+
+```bash
+kubectl -n kube-system rollout status deployment/aws-load-balancer-controller --timeout=120s
+kubectl -n kube-system get endpointslices -l kubernetes.io/service-name=aws-load-balancer-webhook-service -o wide
+kubectl -n kube-system logs deployment/aws-load-balancer-controller --tail=100
+kubectl get ingressclass alb
+```
+
+Los endpoints deben corresponder a pods listos y al puerto 9443. Si persiste el
+timeout, revise los security groups realmente asociados a las ENI del control
+plane y a los nodos/pods, las NACL, las rutas y posibles NetworkPolicies de
+`kube-system`. Una prueba desde un pod no demuestra acceso desde el control plane.
+No deshabilite el webhook ni cambie su política de fallo para ocultar el error.
+
+El chart de la aplicación declara `spec.ingressClassName: alb`; la anotación
+obsoleta `kubernetes.io/ingress.class` se retiró. La clase `alb` debe existir y
+ser administrada por AWS Load Balancer Controller.
+
 El entorno Terraform implementa esta ruta de tráfico:
 ```text
 Internet → Route 53 → ALB + WAF → AWS Load Balancer Controller → Service → Pods

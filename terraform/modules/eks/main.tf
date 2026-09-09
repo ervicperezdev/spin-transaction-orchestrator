@@ -57,6 +57,17 @@ resource "aws_security_group_rule" "node_from_cluster_kubelet" {
   source_security_group_id = aws_security_group.cluster.id
 }
 
+# El Service del webhook expone 443 y lo dirige al puerto 9443 de los pods.
+resource "aws_security_group_rule" "node_from_cluster_alb_webhook" {
+  type                     = "ingress"
+  description              = "EKS control plane to AWS Load Balancer Controller webhook"
+  from_port                = 9443
+  to_port                  = 9443
+  protocol                 = "tcp"
+  security_group_id        = aws_security_group.node.id
+  source_security_group_id = aws_security_group.cluster.id
+}
+
 resource "aws_launch_template" "node" {
   name_prefix            = "${var.cluster_name}-node-"
   vpc_security_group_ids = [aws_security_group.node.id]
