@@ -30,17 +30,6 @@ resource "aws_iam_role_policy_attachment" "node_ecr" {
   policy_arn = "arn:aws:iam::aws:policy/AmazonEC2ContainerRegistryReadOnly"
 }
 
-resource "aws_kms_key" "secrets" {
-  description             = "EKS Kubernetes secrets envelope-encryption key"
-  deletion_window_in_days = 30
-  enable_key_rotation     = true
-}
-
-resource "aws_kms_alias" "secrets" {
-  name          = "alias/${var.cluster_name}-eks-secrets"
-  target_key_id = aws_kms_key.secrets.key_id
-}
-
 resource "aws_eks_cluster" "this" {
   name     = var.cluster_name
   role_arn = aws_iam_role.cluster.arn
@@ -51,11 +40,6 @@ resource "aws_eks_cluster" "this" {
     endpoint_private_access = true
     endpoint_public_access  = false
     public_access_cidrs     = var.allowed_control_plane_cidrs
-  }
-
-  encryption_config {
-    resources = ["secrets"]
-    provider { key_arn = aws_kms_key.secrets.arn }
   }
 
   enabled_cluster_log_types = ["api", "audit", "authenticator"]

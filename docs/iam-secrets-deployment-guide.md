@@ -1,8 +1,8 @@
 # IAM and Secrets deployment guide
 
 This guide configures identity without putting a credential or secret value in
-the repository. It assumes the AWS account, EKS cluster and ESO add-on are
-owned by an authorized platform operator.
+the repository. It assumes the AWS account, EKS cluster and AWS Secrets Store
+CSI driver/provider are owned by an authorized platform operator.
 
 ## 1. Bootstrap reviewed inputs
 
@@ -23,20 +23,23 @@ Run `terraform plan` for review, then apply only through the approved
 infrastructure change process. Terraform deliberately never sets a secret
 value.
 
-## 2. Bind ESO, not the application
+## 2. Bind the transaction API and mount Secrets Manager directly
 
-Annotate ESO's actual service account with `workload_role_arn`:
+Annotate the transaction API service account with `workload_role_arn`:
 
 ```yaml
-eks.amazonaws.com/role-arn: arn:aws:iam::<account-id>:role/<environment>-external-secrets
+eks.amazonaws.com/role-arn: arn:aws:iam::<account-id>:role/<environment>-transaction-api
 ```
 
-The namespace and service-account name must match
-`external_secrets_namespace` and `external_secrets_service_account`. The Helm
-chart's `ExternalSecret` then references the named `ClusterSecretStore`; it
-only materializes `db-username`, `db-password`, and
-`payment-provider-api-key` inside the cluster. Do not annotate the
-`transaction-api` service account with this role.
+The namespace and service-account name must match `application_namespace` and
+`application_service_account`. Set the Helm `serviceAccount.roleArn`,
+`secretsManager.region`, and `secretsManager.secretArn` values. The chart
+creates a `SecretProviderClass` that mounts the approved JSON fields as
+read-only files; Spring Boot imports them through `configtree`. It does not
+create a Kubernetes `Secret`.
+
+Secrets Manager should use its AWS-managed key (`alias/aws/secretsmanager`),
+and RDS uses its AWS-managed RDS key. No customer-managed KMS key is created.
 
 ## 3. Configure CI federation
 
@@ -55,9 +58,9 @@ role has no IAM write, Secrets Manager, wildcard ECR repository, or
 
 - `terraform fmt -check -recursive terraform` and `terraform validate` pass.
 - The GitHub role trust contains both exact `aud` and `sub` conditions.
-- The ESO trust contains exact EKS issuer, namespace and service-account
+- The API IRSA trust contains exact EKS issuer, namespace and service-account
   conditions.
 - `workload_secret_arns` contains only the intended secret ARNs.
 - Repository and organization secrets contain no static AWS access key pair.
 - `helm template transaction-api helm/transaction-api` renders the
-  `ExternalSecret` without revealing a value.
+  `SecretProviderClass` and CSI volume without revealing a value.

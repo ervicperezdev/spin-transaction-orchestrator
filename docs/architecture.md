@@ -33,7 +33,8 @@ at deployment time.
 
 The container image is built from a Maven stage and runs the packaged JAR as the
 distroless image's `nonroot` user. Helm also declares probes, resource values,
-a security context and optional External Secrets / NetworkPolicy templates.
+a security context, AWS Secrets Store CSI `SecretProviderClass`, and
+NetworkPolicy templates.
 
 ## Decision records
 

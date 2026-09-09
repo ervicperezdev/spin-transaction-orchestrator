@@ -53,14 +53,14 @@ variable "eks_oidc_issuer_hostpath" {
   }
 }
 
-variable "external_secrets_namespace" {
+variable "application_namespace" {
   type    = string
-  default = "external-secrets"
+  default = "transaction-api"
 }
 
-variable "external_secrets_service_account" {
+variable "application_service_account" {
   type    = string
-  default = "external-secrets"
+  default = "transaction-api"
 }
 
 variable "allowed_control_plane_cidrs" {

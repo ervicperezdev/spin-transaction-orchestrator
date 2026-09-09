@@ -39,7 +39,7 @@ module "rds" {
 
 module "workload_iam" {
   source                     = "../../modules/iam"
-  role_name                  = "${local.name}-external-secrets"
+  role_name                  = "${local.name}-transaction-api"
   secret_resource_arns       = var.workload_secret_arns
   github_repository          = var.github_repository
   github_ref                 = var.github_ref
@@ -47,6 +47,6 @@ module "workload_iam" {
   eks_cluster_arn            = module.eks.cluster_arn
   eks_oidc_provider_arn      = var.eks_oidc_provider_arn
   eks_oidc_issuer_hostpath   = var.eks_oidc_issuer_hostpath
-  kubernetes_namespace       = var.external_secrets_namespace
-  kubernetes_service_account = var.external_secrets_service_account
+  kubernetes_namespace       = var.application_namespace
+  kubernetes_service_account = var.application_service_account
 }

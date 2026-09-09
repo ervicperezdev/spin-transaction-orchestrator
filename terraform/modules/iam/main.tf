@@ -111,8 +111,8 @@ data "aws_iam_policy_document" "workload_trust" {
   }
 }
 
-# This role is intentionally independent from node and CI roles. Bind it to
-# External Secrets Operator's service account, not to the application pod.
+# This role is intentionally independent from node and CI roles. Bind it only
+# to the transaction API service account that mounts Secrets Manager through CSI.
 resource "aws_iam_role" "workload" {
   name               = var.role_name
   assume_role_policy = data.aws_iam_policy_document.workload_trust.json
