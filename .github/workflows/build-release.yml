@@ -1,118 +1,117 @@
 name: Build & Release
 
-# Triggered on every merge to main. Builds the artifact ONCE, tags it with the
-# commit SHA, pushes to ECR, scans it, generates an SBOM, signs it with Cosign
-# keyless signing, then promotes the same image to EKS without rebuilding.
+# Build once → Scan → SBOM → Push → Sign → Deploy
 #
-# AUTH: GitHub OIDC → AWS STS AssumeRoleWithWebIdentity.
-#   No static AWS_ACCESS_KEY_ID / AWS_SECRET_ACCESS_KEY stored in GitHub Secrets.
-#   The OIDC token is minted by GitHub per-run and exchanged for short-lived
-#   STS credentials that expire when the job ends.
+# Authentication:
+# GitHub OIDC → AWS STS AssumeRoleWithWebIdentity.
+# No static AWS credentials are stored in GitHub.
 
 on:
   push:
-    branches: [main]
+    branches:
+      - main
 
 env:
-  # ECR registry and image name are resolved at runtime from AWS account metadata
-  # and repository variables so no registry URL is hardcoded here.
   IMAGE_NAME: spin-transaction-orchestrator
 
-# id-token: write is required globally so the OIDC token can be minted for
-# aws-actions/configure-aws-credentials in both jobs.
 permissions:
   contents: read
   id-token: write
 
 jobs:
-  # ── BUILD, SCAN, SIGN, PUSH ───────────────────────────────────────────────
+  # ──────────────────────────────────────────────────────────────────────────
+  # BUILD → SCAN → SBOM → PUSH → SIGN
+  # ──────────────────────────────────────────────────────────────────────────
   build-and-push:
-    name: Build → Scan → Sign → Push
+    name: Build → Scan → SBOM → Push → Sign
     runs-on: ubuntu-latest
 
     outputs:
       image-tag: ${{ github.sha }}
       ecr-image: ${{ steps.ecr-login.outputs.registry }}/${{ env.IMAGE_NAME }}
+      image-digest: ${{ steps.ecr-digest.outputs.digest }}
 
     steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      # ── Checkout ──────────────────────────────────────────────────────────
+      - name: Checkout repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
-      # Java build ─────────────────────────────────────────────────────────
-      - name: Set up Java 21 (Temurin)
+      # ── Java ──────────────────────────────────────────────────────────────
+      - name: Set up Java 21
         uses: actions/setup-java@dd06d9cba3e5552c54d9f8ea23572deb30010f7c # v6.0.0
         with:
           java-version: "21"
           distribution: temurin
           cache: maven
 
-      - name: Package (skip tests – tests ran in PR gate)
-        run: ./mvnw --batch-mode --no-transfer-progress package -DskipTests
+      # Tests already executed in PR validation.
+      - name: Package application
+        run: |
+          ./mvnw \
+            --batch-mode \
+            --no-transfer-progress \
+            package \
+            -DskipTests
 
-      - name: Debug GitHub OIDC claims
-        uses: actions/github-script@d746ffe35508b1917358783b479e04febd2b8f71 # v9.0.0
-        with:
-          script: |
-            const token = await core.getIDToken('sts.amazonaws.com');
-            const payload = JSON.parse(
-              Buffer.from(token.split('.')[1], 'base64url').toString()
-            );
-
-            console.log('iss:', payload.iss);
-            console.log('aud:', payload.aud);
-            console.log('sub:', payload.sub);
-            console.log('repository:', payload.repository);
-            console.log('repository_id:', payload.repository_id);
-            console.log('repository_owner:', payload.repository_owner);
-            console.log('repository_owner_id:', payload.repository_owner_id);
-            console.log('ref:', payload.ref);
-
-      # AWS auth via OIDC – no static keys ──────────────────────────────────
-      - name: Configure AWS credentials (OIDC)
+      # ── AWS OIDC ──────────────────────────────────────────────────────────
+      - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@cbe3b392738ccf3f987d68400dafcf4b0624a56c # v6.2.4
         with:
           role-to-assume: ${{ secrets.AWS_DEPLOY_ROLE_ARN }}
           aws-region: ${{ vars.AWS_REGION }}
           audience: sts.amazonaws.com
 
-      # ECR login ───────────────────────────────────────────────────────────
+      # Optional but useful for audit/troubleshooting.
+      - name: Verify AWS identity
+        run: aws sts get-caller-identity
+
+      # ── ECR ───────────────────────────────────────────────────────────────
       - name: Log in to Amazon ECR
         id: ecr-login
         uses: aws-actions/amazon-ecr-login@aded0d722166a37980e030aa969dda0bfe6b6947 # v2.1.7
 
-      # Docker build & push ─────────────────────────────────────────────────
+      # ── Docker ────────────────────────────────────────────────────────────
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@37fe631027851001ddb9b187196cc803df7f5f0e # v4.3.0
 
-      - name: Build and push Docker image
-        id: build-push
+      # IMPORTANT:
+      # Build exactly once and load the resulting image into the Docker daemon.
+      # We intentionally DO NOT push yet.
+      - name: Build Docker image
         uses: docker/build-push-action@53b7df96c91f9c12dcc8a07bcb9ccacbed38856a # v7.3.0
         with:
           context: .
           load: true
           push: false
-          # Tag with commit SHA (immutable, traceable) AND latest (mutable pointer).
-          # Deployments always reference the SHA tag so rollbacks are deterministic.
           tags: |
             ${{ steps.ecr-login.outputs.registry }}/${{ env.IMAGE_NAME }}:${{ github.sha }}
 
-      # Trivy – container image scan ────────────────────────────────────────
-      - name: Scan pushed image for vulnerabilities
+      # ── Trivy Security Gate ───────────────────────────────────────────────
+      #
+      # Scan the exact local image that will later be pushed.
+      # HIGH/CRITICAL vulnerabilities with available fixes block publication.
+      #
+      - name: Scan image with Trivy
         run: |
           ECR_REGISTRY="${{ steps.ecr-login.outputs.registry }}"
+          IMAGE="${ECR_REGISTRY}/${IMAGE_NAME}:${{ github.sha }}"
+
           docker run --rm \
             --volume /var/run/docker.sock:/var/run/docker.sock \
-            aquasec/trivy:0.58.1 image \
+            aquasec/trivy:0.58.1 \
+            image \
             --scanners vuln \
             --severity HIGH,CRITICAL \
             --ignore-unfixed \
             --exit-code 1 \
             --no-progress \
-            "${ECR_REGISTRY}/${IMAGE_NAME}:${{ github.sha }}"
+            "${IMAGE}"
 
-      # SBOM – Syft (anchore/sbom-action) ───────────────────────────────────
-      # Generates a Software Bill of Materials in SPDX format so downstream
-      # teams can audit every library shipped inside the container.
-      - name: Generate SBOM (SPDX)
+      # ── SBOM ──────────────────────────────────────────────────────────────
+      #
+      # Generate the SBOM from the SAME local image that passed Trivy.
+      #
+      - name: Generate SBOM
         uses: anchore/sbom-action@006b7ce8314066bdf1765b4500370d40fa6917a3 # v0.24.2
         with:
           image: ${{ steps.ecr-login.outputs.registry }}/${{ env.IMAGE_NAME }}:${{ github.sha }}
@@ -126,55 +125,113 @@ jobs:
           path: sbom.spdx.json
           retention-days: 90
 
-      # Cosign keyless signing ───────────────────────────────────────────────
-      # Keyless signing uses the GitHub OIDC identity (no signing key to rotate).
-      # The signature is stored in the Sigstore transparency log (Rekor) and
-      # attached to the image in ECR as an OCI artifact.
+      # ── Push validated artifact ───────────────────────────────────────────
+      #
+      # Only an image that passed Trivy reaches ECR.
+      #
+      - name: Push validated image to ECR
+        run: |
+          ECR_REGISTRY="${{ steps.ecr-login.outputs.registry }}"
+          IMAGE="${ECR_REGISTRY}/${IMAGE_NAME}:${{ github.sha }}"
+
+          docker push "${IMAGE}"
+
+      # ── Resolve authoritative ECR digest ──────────────────────────────────
+      #
+      # IMPORTANT:
+      # Do NOT use build-push-action's digest here because the image was loaded
+      # locally and pushed later with docker push.
+      #
+      # ECR is now the source of truth for the digest.
+      #
+      - name: Resolve image digest from ECR
+        id: ecr-digest
+        run: |
+          DIGEST=$(aws ecr describe-images \
+            --repository-name "${IMAGE_NAME}" \
+            --image-ids imageTag="${{ github.sha }}" \
+            --query 'imageDetails[0].imageDigest' \
+            --output text)
+
+          if [[ -z "${DIGEST}" || "${DIGEST}" == "None" ]]; then
+            echo "Unable to resolve image digest from ECR"
+            exit 1
+          fi
+
+          echo "ECR image digest: ${DIGEST}"
+          echo "digest=${DIGEST}" >> "$GITHUB_OUTPUT"
+
+      # Extra verification before signing.
+      - name: Verify image digest exists in ECR
+        run: |
+          aws ecr describe-images \
+            --repository-name "${IMAGE_NAME}" \
+            --image-ids imageDigest="${{ steps.ecr-digest.outputs.digest }}"
+
+      # ── Cosign ────────────────────────────────────────────────────────────
       - name: Install Cosign
         uses: sigstore/cosign-installer@6f9f17788090df1f26f669e9d70d6ae9567deba6 # v4.1.2
 
+      # Sign the digest returned by ECR, not the local Buildx digest.
       - name: Sign image with keyless OIDC identity
         run: |
           ECR_REGISTRY="${{ steps.ecr-login.outputs.registry }}"
-          cosign sign --yes \
-            "${ECR_REGISTRY}/${IMAGE_NAME}@${{ steps.build-push.outputs.digest }}"
 
-  # ── DEPLOY TO EKS ────────────────────────────────────────────────────────
+          cosign sign --yes \
+            "${ECR_REGISTRY}/${IMAGE_NAME}@${{ steps.ecr-digest.outputs.digest }}"
+
+  # ──────────────────────────────────────────────────────────────────────────
+  # DEPLOY TO EKS
+  # ──────────────────────────────────────────────────────────────────────────
   deploy-eks:
     name: Deploy to EKS
     needs: build-and-push
     runs-on: ubuntu-latest
 
     steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Checkout repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
-      # AWS auth via OIDC – same pattern, separate deploy role if needed ─────
-      - name: Configure AWS credentials (OIDC)
+      # ── AWS OIDC ──────────────────────────────────────────────────────────
+      - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@cbe3b392738ccf3f987d68400dafcf4b0624a56c # v6.2.4
         with:
           role-to-assume: ${{ secrets.AWS_DEPLOY_ROLE_ARN }}
           aws-region: ${{ vars.AWS_REGION }}
           audience: sts.amazonaws.com
 
-      # kubeconfig ──────────────────────────────────────────────────────────
+      # ── EKS kubeconfig ────────────────────────────────────────────────────
       - name: Configure kubeconfig for EKS
         run: |
           aws eks update-kubeconfig \
             --name "${{ vars.EKS_CLUSTER_NAME }}" \
             --region "${{ vars.AWS_REGION }}"
 
-      # Helm deploy – promotes the same SHA-tagged image built above ─────────
+      # ── Helm deployment ───────────────────────────────────────────────────
+      #
+      # Deploy the exact commit SHA that passed the security gate.
+      #
       - name: Helm upgrade / install
         run: |
-          helm upgrade --install transaction-api helm/transaction-api/ \
-            --set image.tag="${{ github.sha }}" \
+          helm upgrade --install transaction-api \
+            helm/transaction-api/ \
+            --set image.repository="${{ needs.build-and-push.outputs.ecr-image }}" \
+            --set image.tag="${{ needs.build-and-push.outputs.image-tag }}" \
             --namespace transaction-api \
             --create-namespace \
             --wait \
             --timeout 5m
 
-      # Smoke test – verify the health endpoint is reachable after deploy ────
-      - name: Smoke test – /actuator/health
+      # ── Smoke test ────────────────────────────────────────────────────────
+      #
+      # Unlike the previous implementation, failure here FAILS the pipeline.
+      #
+      - name: Smoke test
         run: |
-          curl -f "https://${{ vars.APP_HOSTNAME }}/actuator/health" \
-            || echo "Smoke test failed – check deployment logs"
+          curl \
+            --fail \
+            --silent \
+            --show-error \
+            --retry 5 \
+            --retry-delay 10 \
+            "https://${{ vars.APP_HOSTNAME }}/actuator/health"
