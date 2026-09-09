@@ -7,6 +7,11 @@ sources through Terraform. It does **not** deploy a log shipper, OpenTelemetry
 collector, dashboards, or CloudWatch alarms. Those production integrations are
 P3 work and must be operated by the platform owner.
 
+The corresponding CloudTrail, GuardDuty, Security Hub and WAF-log detection
+strategy is documented in `docs/cloud-security-operations.md`. It is also a
+design only: no audit trail, finding aggregator, log destination or SOC routing
+is provisioned by this repository.
+
 Secrets Manager is the source of truth for credentials. Secret values mounted by
 the AWS Secrets Store CSI driver, payment-provider credentials, transaction IDs,
 idempotency keys, provider references, amounts, currencies, request/response
