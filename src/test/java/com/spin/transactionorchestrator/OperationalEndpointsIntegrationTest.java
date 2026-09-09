@@ -43,6 +43,22 @@ class OperationalEndpointsIntegrationTest {
                 .andExpect(jsonPath("$.components").doesNotExist());
 
         mockMvc.perform(get("/actuator/env")).andExpect(status().isNotFound());
+        mockMvc.perform(get("/actuator/metrics")).andExpect(status().isOk());
+    }
+
+    @Test
+    void echoesOnlyValidCorrelationIds() throws Exception {
+        String correlationId = "771f078b-f446-4207-b1b7-0ec11b17c5f4";
+
+        mockMvc.perform(get("/actuator/health").header("X-Correlation-ID", correlationId))
+                .andExpect(status().isOk())
+                .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers.header()
+                        .string("X-Correlation-ID", correlationId));
+
+        mockMvc.perform(get("/actuator/health").header("X-Correlation-ID", "not-a-uuid"))
+                .andExpect(status().isOk())
+                .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers.header()
+                        .exists("X-Correlation-ID"));
     }
 
     @Test
