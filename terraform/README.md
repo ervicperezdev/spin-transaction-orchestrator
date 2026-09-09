@@ -23,7 +23,7 @@ Copy `backend.hcl.example` outside the repository and replace its placeholders. 
 ## Security boundaries and assumptions
 
 - The VPC supplies isolated database subnets and private application subnets; RDS is never publicly accessible.
-- EKS endpoint access is private; the permitted control-plane CIDRs must be explicitly supplied by the environment owner.
+- The repository baseline disables public EKS endpoint access. `allowed_control_plane_cidrs` configures the public endpoint allowlist when enabled; it does not grant private connectivity. The proposed temporary development exception for GitHub-hosted runners is recorded in [EXC-001](../docs/security/EXC-001-eks-public-endpoint.md), with approval and live verification pending.
 - RDS uses encrypted storage, encrypted backups, deletion protection, a private subnet group and a security group that accepts PostgreSQL only from the EKS node security group.
 - ECR image scanning and immutable tags protect the registry boundary. Lifecycle retention is deliberately short only for untagged images.
 - GitHub Actions uses an OIDC-to-STS deployment role restricted to the configured repository and branch. It can push only to this ECR repository and discover only this EKS cluster; it has no static AWS keys or Secrets Manager access.

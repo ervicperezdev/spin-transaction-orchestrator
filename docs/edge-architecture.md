@@ -28,6 +28,15 @@ gateway per availability zone or approved VPC endpoints.
 
 ## Security groups
 
+The Kubernetes API is a separate management path from the application ALB.
+The current Terraform baseline disables public API access. The proposed
+development-only deviation for standard GitHub-hosted runners is tracked in
+[EXC-001](security/EXC-001-eks-public-endpoint.md), including possible all-IPv4
+exposure, expiry and the required private-connectivity migration. The ALB's
+WAF does not inspect Kubernetes API requests. The cluster security-group rules
+below must not be interpreted as an allowlist for a public EKS endpoint;
+`public_access_cidrs` controls that public access.
+
 Terraform owns all workload-facing security groups. The public ALB group allows
 only TCP/80 (redirect) and TCP/443 from the Internet, and may egress only to
 TCP/8080 on the worker-node group. The worker-node group has no public ingress;

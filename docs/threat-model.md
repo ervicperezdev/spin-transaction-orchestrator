@@ -133,6 +133,13 @@ Text-based Data Flow Diagram:
 
 ## Risk Acceptance Matrix
 
+The proposed temporary public EKS management endpoint introduces an additional
+Internet-to-Kubernetes-API boundary outside the application's WAF/ALB path.
+Scanning, unauthorized authentication attempts and abuse of stolen authorized
+credentials are assessed in [EXC-001](security/EXC-001-eks-public-endpoint.md).
+Residual risk is High pending verification; this is a proposed development
+acceptance with expiry, not evidence of deployed controls or production approval.
+
 | Threat | Likelihood | Impact | Risk Level | Control | Owner |
 |---|---|---|---|---|---|
 | API flooding / DDoS | High | High | Critical | WAF rate rules + ALB limits | Platform Engineer |
