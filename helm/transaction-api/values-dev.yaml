@@ -1,4 +1,11 @@
+# Valores de desarrollo. Usar con --namespace transaction-api.
+# Reemplazar todos los REPLACE_WITH_* antes de desplegar; solo guardar
+# identificadores aquí, nunca contraseñas ni el contenido de Secrets Manager.
 replicaCount: 1
+
+image:
+  repository: "911167887101.dkr.ecr.us-east-1.amazonaws.com/spin-transaction-orchestrator"
+  # El pipeline debe proporcionar image.tag con el SHA de la imagen publicada.
 
 autoscaling:
   minReplicas: 1
@@ -12,18 +19,41 @@ resources:
     cpu: 250m
     memory: 512Mi
 
+serviceAccount:
+  create: true
+  name: "transaction-api"
+  # Confirmar con terraform output -raw workload_role_arn; no usar el rol CI.
+  roleArn: "arn:aws:iam::911167887101:role/spin-dev-transaction-api"
+
 config:
-  dbUrl: "jdbc:postgresql://REPLACE_WITH_DEV_RDS_ENDPOINT:5432/transactions_dev"
+  # Usar el host de terraform output -raw rds_endpoint, sin duplicar el puerto.
+  # Terraform crea la base transactions, también para el ambiente dev.
+  dbUrl: "jdbc:postgresql://spin-dev.cs1s0e0m6t0w.us-east-1.rds.amazonaws.com:5432/transactions"
   paymentProviderBaseUrl: "https://sandbox.REPLACE_WITH_PROVIDER_URL"
   serverPort: "8080"
 
 secretsManager:
+  enabled: true
   region: "us-east-1"
-  secretArn: "REPLACE_WITH_SECRETS_MANAGER_ARN"
+  # Autorizar este mismo ARN en workload_secret_arns de Terraform.
+  # JSON requerido: db-username, db-password y payment-provider-api-key.
+  secretArn: "arn:aws:secretsmanager:us-east-1:911167887101:secret:rds!db-19d34a63-3f5e-46e0-acfa-36988c44abcc-pqzfJX"
 
 ingress:
+  enabled: true
+  annotations:
+    # Salidas acm_certificate_arn, waf_web_acl_arn y alb_security_group_id.
+    alb.ingress.kubernetes.io/certificate-arn: "arn:aws:acm:us-east-1:911167887101:certificate/27d8dcfd-8292-4f4d-be17-69f19588d9cf"
+    alb.ingress.kubernetes.io/wafv2-acl-arn: "arn:aws:wafv2:us-east-1:911167887101:regional/webacl/spin-dev-web/f416396d-c2ec-4233-a344-ac0a72b80cbf"
+    alb.ingress.kubernetes.io/security-groups: "sg-0b55406a1036d29ee"
+    external-dns.alpha.kubernetes.io/hostname: "spin.ervic.pro"
   hosts:
-    - host: "transaction-api.dev.example.com"
+    - host: "spin.ervic.pro"
       paths:
         - path: /
           pathType: Prefix
+
+networkPolicy:
+  enabled: true
+  # Debe coincidir con el CIDR de la VPC desde la que el ALB alcanza los pods.
+  albSourceCidrs: ["10.42.0.0/16"]
