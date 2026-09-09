@@ -4,3 +4,9 @@ target/
 *.iml
 .env
 .DS_Store
+**/.terraform/
+*.tfplan
+*.tfstate
+*.tfstate.*
+*.tfvars
+!*.tfvars.example
