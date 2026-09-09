@@ -19,6 +19,9 @@ secundario de cada validación de pull request.
 4. Integre con squash merge o merge commit según la convención acordada por el
    equipo, conservando un mensaje que explique el cambio. Evite mantener ramas
    de integración compartidas o divergentes.
+5. GitHub elimina automáticamente la rama de origen después de un merge
+   exitoso. No reutilice una rama eliminada: cree una nueva desde el `main`
+   actualizado para el siguiente cambio.
 
 Convenciones de nombre:
 
@@ -60,6 +63,10 @@ propietario cuando trabaja solo. La invalidación de revisiones obsoletas se
 mantiene configurada para que una aprobación opcional no sobreviva a cambios
 del `HEAD`. La regla también se aplica a administradores para que no haya una
 ruta de bypass silenciosa.
+
+Además, la configuración del repositorio `delete_branch_on_merge` está
+habilitada. Esta elimina automáticamente la rama fuente de un PR al fusionarlo;
+no afecta ni permite borrar la rama protegida `main`.
 
 Todos los checks que se ejecutan para cada PR a `main` son requeridos antes del
 merge. Los nombres exactos configurados son: **`Compile`**, **`Unit &
