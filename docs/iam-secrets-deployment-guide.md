@@ -102,8 +102,8 @@ Identity Agent no instala este CRD. El error `no matches for kind
 "SecretProviderClass"` indica que el tipo no está disponible en Kubernetes;
 cambiar el ARN del secreto no instala el driver.
 
-El workflow actual solo sobrescribe la imagen y su tag. Pase un archivo de
-valores real con `-f` que configure `serviceAccount.roleArn`,
+El workflow carga `helm/transaction-api/values-dev.yaml` y sobrescribe la imagen
+y su tag con el artefacto construido. Este archivo debe configurar `serviceAccount.roleArn`,
 `secretsManager.secretArn`, `secretsManager.region`, `config.dbUrl`, URL del
 proveedor e Ingress. Los archivos de ejemplo conservan placeholders. No incluya
 valores secretos. El JSON de Secrets Manager debe contener `db-username`,

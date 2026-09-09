@@ -232,6 +232,7 @@ jobs:
         run: |
           helm upgrade --install transaction-api \
             helm/transaction-api/ \
+            --values helm/transaction-api/values-dev.yaml \
             --set image.repository="${{ needs.build-and-push.outputs.ecr-image }}" \
             --set image.tag="${{ needs.build-and-push.outputs.image-tag }}" \
             --namespace transaction-api \
