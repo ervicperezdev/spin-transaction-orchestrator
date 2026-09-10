@@ -155,7 +155,7 @@ resource "aws_db_instance" "this" {
   monitoring_interval                 = 60
   monitoring_role_arn                 = aws_iam_role.enhanced_monitoring.arn
   parameter_group_name                = aws_db_parameter_group.postgres.name
-  depends_on = [aws_iam_role_policy_attachment.enhanced_monitoring]
+  depends_on                          = [aws_iam_role_policy_attachment.enhanced_monitoring]
 }
 
 output "endpoint" { value = aws_db_instance.this.address }
