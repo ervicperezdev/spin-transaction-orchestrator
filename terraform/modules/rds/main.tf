@@ -76,7 +76,7 @@ resource "aws_db_parameter_group" "postgres" {
     value = "1000"
   }
   parameter {
-    name  = "force_ssl"
+    name  = "rds.force_ssl"
     value = "1"
   }
 }
@@ -98,7 +98,7 @@ resource "aws_security_group" "database" {
 }
 
 resource "aws_db_instance" "this" {
-  # checkov:skip=CKV2_AWS_69: PostgreSQL TLS is enforced through the attached postgres16 parameter group (force_ssl=1); this graph check does not follow parameter-group settings.
+  # checkov:skip=CKV2_AWS_69: PostgreSQL TLS is enforced through the attached postgres16 parameter group (rds.force_ssl=1); this graph check does not follow parameter-group settings.
   identifier                          = var.identifier
   engine                              = "postgres"
   engine_version                      = "16"

@@ -16,7 +16,7 @@ con controles compensatorios identificados.
 | CKV_AWS_341 | Launch template EKS | El hop limit 2 soporta rutas de red de pods que usan IMDS; IMDSv2 es obligatorio y los tags de metadata están deshabilitados. |
 | CKV_AWS_39 | EKS public endpoint | Excepción temporal EXC-001: acceso público limitado por CIDR para runners hospedados de GitHub durante desarrollo; el endpoint privado también permanece activo. Debe retirarse al habilitar runner privado. |
 | CKV_AWS_109, CKV_AWS_111, CKV_AWS_356 | KMS key policies | Las políticas de una CMK requieren el statement administrativo de account root y `Resource="*"` por diseño de KMS; los consumidores de cifrado reciben grants del servicio, no permisos IAM amplios. |
-| CKV2_AWS_69 | RDS PostgreSQL | TLS se fuerza con `force_ssl=1` en el parameter group PostgreSQL adjunto. El check de grafo no sigue esa relación. |
+| CKV2_AWS_69 | RDS PostgreSQL | TLS se fuerza con `rds.force_ssl=1` en el parameter group PostgreSQL adjunto. El check de grafo no sigue esa relación. |
 
 Las demás alertas del análisis se remedian en Terraform: cifrado KMS de ECR y
 Secrets de EKS, logs completos de EKS y VPC Flow Logs, default security group
