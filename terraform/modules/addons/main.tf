@@ -15,7 +15,7 @@ resource "helm_release" "secrets_provider_aws" {
   create_namespace = false
   wait             = true
   timeout          = 600
-
+  upgrade_install  = true
   values = [yamlencode({
     "secrets-store-csi-driver" = {
       install    = true
