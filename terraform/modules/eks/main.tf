@@ -2,6 +2,10 @@ variable "cluster_name" { type = string }
 variable "subnet_ids" { type = list(string) }
 variable "vpc_id" { type = string }
 variable "github_deploy_role_arn" { type = string }
+variable "terraform_apply_role_arn" {
+  type        = string
+  description = "OIDC Terraform apply role that manages EKS add-ons through the Kubernetes and Helm providers."
+}
 variable "cluster_admin_principal_arn" {
   type        = string
   description = "IAM principal allowed to administer the cluster and install platform addons."
@@ -171,6 +175,25 @@ resource "aws_eks_access_policy_association" "github_deploy" {
     aws_eks_access_entry.github_deploy
   ]
 }
+
+# Terraform manages cluster-scoped add-ons and a namespace; its separate OIDC
+# apply role needs API access, but no application delivery role is elevated.
+resource "aws_eks_access_entry" "terraform_apply" {
+  cluster_name  = aws_eks_cluster.this.name
+  principal_arn = var.terraform_apply_role_arn
+  type          = "STANDARD"
+}
+
+resource "aws_eks_access_policy_association" "terraform_apply" {
+  cluster_name  = aws_eks_access_entry.terraform_apply.cluster_name
+  principal_arn = aws_eks_access_entry.terraform_apply.principal_arn
+  policy_arn    = "arn:aws:eks::aws:cluster-access-policy/AmazonEKSClusterAdminPolicy"
+
+  access_scope {
+    type = "cluster"
+  }
+}
+
 resource "aws_eks_node_group" "default" {
   cluster_name    = aws_eks_cluster.this.name
   node_group_name = "system"

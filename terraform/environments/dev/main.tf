@@ -48,6 +48,7 @@ module "eks" {
   subnet_ids                  = module.vpc.private_subnet_ids
   allowed_control_plane_cidrs = var.allowed_control_plane_cidrs
   github_deploy_role_arn      = module.workload_iam.github_deploy_role_arn
+  terraform_apply_role_arn    = module.workload_iam.github_terraform_apply_role_arn
   cluster_admin_principal_arn = var.cluster_admin_principal_arn
 }
 
@@ -61,15 +62,18 @@ module "rds" {
 }
 
 module "workload_iam" {
-  source                     = "../../modules/iam"
-  role_name                  = "${local.name}-transaction-api"
-  secret_resource_arns       = var.workload_secret_arns
-  github_repository          = var.github_repository
-  github_ref                 = var.github_ref
-  ecr_repository_arn         = module.ecr.repository_arn
-  eks_cluster_arn            = module.eks.cluster_arn
-  eks_oidc_provider_arn      = var.eks_oidc_provider_arn
-  eks_oidc_issuer_hostpath   = var.eks_oidc_issuer_hostpath
-  kubernetes_namespace       = var.application_namespace
-  kubernetes_service_account = var.application_service_account
+  source                              = "../../modules/iam"
+  role_name                           = "${local.name}-transaction-api"
+  secret_resource_arns                = var.workload_secret_arns
+  github_repository                   = var.github_repository
+  github_ref                          = var.github_ref
+  terraform_state_bucket_name         = var.terraform_state_bucket_name
+  terraform_state_key                 = var.terraform_state_key
+  terraform_apply_managed_policy_arns = var.terraform_apply_managed_policy_arns
+  ecr_repository_arn                  = module.ecr.repository_arn
+  eks_cluster_arn                     = module.eks.cluster_arn
+  eks_oidc_provider_arn               = var.eks_oidc_provider_arn
+  eks_oidc_issuer_hostpath            = var.eks_oidc_issuer_hostpath
+  kubernetes_namespace                = var.application_namespace
+  kubernetes_service_account          = var.application_service_account
 }

@@ -77,6 +77,30 @@ plan remoto de PR. Cree los roles y secretos Terraform indicados, con una trust
 policy que admita el subject OIDC de PR interno para el rol de plan y los
 subjects `environment:development`/`environment:production` para apply.
 
+### Bootstrap de roles Terraform
+
+El módulo `modules/iam` crea dos roles OIDC de development junto con sus
+outputs: `github_terraform_plan_role_arn` y
+`github_terraform_apply_role_arn`. El primero puede leer el state exacto y
+crear/eliminar sólo su archivo `.tflock`; nunca puede sobrescribir el state.
+El segundo puede leer y escribir exclusivamente
+`spin-transaction-orchestrator/dev/terraform.tfstate` y su lock en el bucket
+configurado. Así el `apply` puede persistir state sin conceder acceso a otros
+states del bucket.
+
+Por el bootstrap, este cambio se debe aplicar una vez con una identidad humana
+o de plataforma ya autorizada contra el backend existente. Después publique
+los outputs como secretos `AWS_TERRAFORM_PLAN_ROLE_ARN` (repositorio) y
+`AWS_TERRAFORM_APPLY_ROLE_ARN` (Environment `development`). El rol de apply
+acepta además `terraform_apply_managed_policy_arns`: adjunte un policy
+account-managed revisado que permita únicamente los recursos Terraform del
+ambiente. No se adjunta `AdministratorAccess` de forma implícita.
+
+El mismo rol de apply recibe una EKS access entry de alcance cluster porque
+Terraform instala add-ons y recursos Helm cluster-scoped. Esta autorización es
+para la identidad Terraform; el rol de entrega de la aplicación conserva su
+acceso limitado al namespace `transaction-api`.
+
 En GitHub, configure `development` y `production` con secrets/variables
 restringidos; en `production` exija reviewers, impida que el autor se
 autoapruebe y limite despliegues a `main` y tags protegidos. Proteja también

@@ -32,7 +32,7 @@ variable "workload_secret_arns" {
 variable "github_repository" {
   type        = string
   description = "GitHub owner/repository trusted to assume the deployment role."
-  default     = "ervicperezdev@55267476/spin-transaction-orchestrator@1360862265"
+  default     = "ervicperezdev/spin-transaction-orchestrator"
 }
 
 variable "repository_name" {
@@ -51,6 +51,24 @@ variable "github_ref" {
     condition     = can(regex("^refs/heads/", var.github_ref))
     error_message = "github_ref must be a branch ref (for example refs/heads/main)."
   }
+}
+
+variable "terraform_state_bucket_name" {
+  type        = string
+  description = "Pre-created S3 bucket that holds the development Terraform state."
+  default     = "spin-transaction-state"
+}
+
+variable "terraform_state_key" {
+  type        = string
+  description = "Exact S3 state key; IAM permissions include only this object and its native S3 lock."
+  default     = "spin-transaction-orchestrator/dev/terraform.tfstate"
+}
+
+variable "terraform_apply_managed_policy_arns" {
+  type        = set(string)
+  description = "Reviewed account-managed policies with write permissions for the Terraform-managed development infrastructure."
+  default     = []
 }
 
 variable "eks_oidc_provider_arn" {
