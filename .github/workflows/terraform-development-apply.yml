@@ -78,7 +78,7 @@ jobs:
               terraform show -json drift.tfplan | jq -r '
                 (.resource_drift // .resource_changes // [])
                 | group_by(.change.actions | join(","))
-                | map("- \(length) \(.[0].change.actions | join(\", \"))")
+                | map("- \(length) \(.[0].change.actions | join(", "))")
                 | .[]
               ' > "$RUNNER_TEMP/terraform-drift-summary.md"
               {
