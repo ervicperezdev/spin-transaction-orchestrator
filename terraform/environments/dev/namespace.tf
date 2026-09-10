@@ -1,5 +1,5 @@
-# El plan de PR refresca este recurso con la EKS View access entry y valida el
-# acceso read-only; el apply sigue siendo la única identidad que lo modifica.
+# El plan de PR refresca este recurso con la EKS View access entry y registra
+# cualquier drift por dirección; el apply sigue siendo la única identidad que lo modifica.
 resource "kubernetes_namespace_v1" "application" {
   metadata {
     name = var.application_namespace
