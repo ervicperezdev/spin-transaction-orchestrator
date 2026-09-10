@@ -1,4 +1,4 @@
-name: PR Validation
+name: Pull Request CI
 
 # Full gate pipeline: every pull request to main must pass ALL critical jobs
 # before merging. Jobs that do not share data run in parallel to keep
@@ -147,24 +147,57 @@ jobs:
           # Helm is pre-installed on ubuntu-latest GitHub-hosted runners.
           helm lint helm/transaction-api/ --set-string ingress.hostname=lint.example.invalid
 
-  # ── 8. HADOLINT – Dockerfile lint (parallel) ──────────────────────────────
-  # Redundant with container-security.yml on push, but included here so the
-  # PR gate catches Dockerfile violations before merge, not after.
-  hadolint:
-    name: Hadolint – Dockerfile Lint
+  # ── 8. CONTAINER SECURITY (parallel) ─────────────────────────────────────
+  # Build and scan one local image without registry credentials. This replaces
+  # the former duplicate Container security workflow.
+  container-security:
+    name: Container Image Security
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
-      - name: Lint Dockerfile
+      - name: Lint Dockerfile with Hadolint
         run: docker run --rm -i hadolint/hadolint:v2.12.0 < Dockerfile
+
+      - name: Build image for scanning
+        run: docker build --tag spin-transaction-orchestrator:${{ github.sha }} .
+
+      - name: Export image without registry credentials
+        run: docker save --output image.tar spin-transaction-orchestrator:${{ github.sha }}
+
+      - name: Scan vulnerabilities and embedded secrets
+        run: >-
+          docker run --rm
+          --volume "$GITHUB_WORKSPACE:/workspace:ro"
+          aquasec/trivy:0.58.1 image
+          --input /workspace/image.tar
+          --scanners vuln,secret
+          --severity HIGH,CRITICAL
+          --ignore-unfixed
+          --exit-code 1
+          --no-progress
+
+      - name: Generate SBOM
+        run: >-
+          docker run --rm
+          --volume "$GITHUB_WORKSPACE:/workspace"
+          anchore/syft:v1.18.1
+          docker-archive:/workspace/image.tar
+          -o spdx-json=/workspace/sbom.spdx.json
+
+      - name: Upload SBOM artifact
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: sbom-${{ github.sha }}
+          path: sbom.spdx.json
+          retention-days: 30
 
   # ── 9. QUALITY GATE (depends on all jobs above) ───────────────────────────
   # A single required status check that the branch protection rule can target.
   # Fails the PR if any critical security or build job failed.
   quality-gate:
     name: Quality Gate
-    needs: [compile, test, gitleaks, semgrep, trivy-sca, checkov, helm-lint, hadolint]
+    needs: [compile, test, gitleaks, semgrep, trivy-sca, checkov, helm-lint, container-security]
     runs-on: ubuntu-latest
     if: always()
     steps:
@@ -177,7 +210,7 @@ jobs:
           echo "trivy-sca:  ${{ needs.trivy-sca.result }}"
           echo "checkov:    ${{ needs.checkov.result }}"
           echo "helm-lint:  ${{ needs.helm-lint.result }}"
-          echo "hadolint:   ${{ needs.hadolint.result }}"
+          echo "container-security: ${{ needs.container-security.result }}"
 
           # Critical jobs that MUST pass.
           CRITICAL_JOBS=(
@@ -186,7 +219,7 @@ jobs:
             "${{ needs.gitleaks.result }}"
             "${{ needs.semgrep.result }}"
             "${{ needs.trivy-sca.result }}"
-            "${{ needs.hadolint.result }}"
+            "${{ needs.container-security.result }}"
           )
           for result in "${CRITICAL_JOBS[@]}"; do
             if [[ "$result" == "failure" || "$result" == "cancelled" ]]; then

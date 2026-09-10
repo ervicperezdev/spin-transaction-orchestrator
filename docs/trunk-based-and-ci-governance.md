@@ -29,7 +29,6 @@ Convenciones de nombre:
 | --- | --- | --- |
 | Funcionalidad | `feature/<tema>` | `feature/idempotency-metrics` |
 | Corrección no urgente | `fix/<tema>` | `fix/retry-timeout` |
-| Seguridad urgente | `hotfix/<tema>` | `hotfix/cve-library` |
 | Documentación | `docs/<tema>` | `docs/ci-governance` |
 | Mantenimiento | `chore/<tema>` | `chore/dependency-update` |
 
@@ -41,15 +40,18 @@ acceso.
 
 ### Hotfixes y releases
 
-Un hotfix sigue el mismo PR y gate que cualquier cambio: se crea una rama
-`hotfix/*` desde el `main` actual, se valida, revisa y fusiona a `main`. No hay
-excepción para push directo, force-push o borrado de `main`. Si una mitigación
-operativa urgente exige una acción fuera del repositorio, debe registrar el
-incidente y reconciliar el cambio mediante PR inmediatamente después.
+Una corrección urgente sigue el mismo PR y gate que cualquier cambio: se crea
+una rama `fix/*` desde el `main` actual, se valida, revisa y fusiona a `main`.
+No hay excepción para push directo, force-push o borrado de `main`. Si una
+mitigación operativa urgente exige una acción fuera del repositorio, debe
+registrar el incidente y reconciliar el cambio mediante PR inmediatamente
+después.
 
-Las releases versionadas se inician exclusivamente con un tag `v*` creado
-sobre un commit ya integrado en `main`; no existe una rama `release/*`
-permanente. Esto conserva una sola línea de integración y una procedencia
+Las releases versionadas se inician exclusivamente con un tag protegido `v*`
+creado sobre un commit ya integrado en `main`; no existe una rama `release/*`
+permanente. Una `release/<versión>` es una excepción temporal para estabilizar
+una entrega: debe justificar su uso, integrarse de vuelta y eliminarse al
+publicar el tag. Esto conserva una sola línea de integración y una procedencia
 trazable del artefacto.
 
 ### Regla de protección de `main`
@@ -72,22 +74,19 @@ Todos los checks que se ejecutan para cada PR a `main` son requeridos antes del
 merge. Los nombres exactos configurados son: **`Compile`**, **`Unit &
 Integration Tests`**, **`Gitleaks – Secret Scan`**, **`Semgrep – SAST`**,
 **`Trivy – SCA (Dependency Scan)`**, **`Checkov – IaC Scan`**, **`Helm Lint`**,
-**`Hadolint – Dockerfile Lint`**, **`Quality Gate`**, **`Lint Dockerfile`** y
-**`Scan container image`**. Los nueve primeros proceden de
-[`PR Validation`](../.github/workflows/pr-validation.yml), y los dos últimos
-de [`Container security`](../.github/workflows/container-security.yml).
-`Quality Gate` se mantiene como agregador defensivo de los controles críticos;
-los checks individuales hacen visible y obligatorio cada resultado en GitHub.
+**`Container Image Security`** y **`Quality Gate`**. Todos proceden de
+[`Pull Request CI`](../.github/workflows/pull-request-ci.yml). `Quality Gate`
+se mantiene como agregador defensivo de los controles críticos; los checks
+individuales hacen visible y obligatorio cada resultado en GitHub.
 
 ### Inventario de GitHub Actions
 
 | Workflow | Archivo | Disparador | Permisos declarados | Rol frente al merge |
 | --- | --- | --- | --- | --- |
-| PR Validation | [`.github/workflows/pr-validation.yml`](../.github/workflows/pr-validation.yml) | `pull_request` a `main` | `contents: read` | **Checks requeridos:** Compile, Unit & Integration Tests, Gitleaks, Semgrep, Trivy SCA, Checkov, Helm Lint, Hadolint y Quality Gate. Checkov conserva `soft-fail` en sus escaneos y Helm Lint puede omitir el paso si no hay chart, pero sus jobs deben completar correctamente. |
-| Container security | [`.github/workflows/container-security.yml`](../.github/workflows/container-security.yml) | `pull_request` y `push` a `main` | `contents: read` | **Checks requeridos en PR:** Lint Dockerfile y Scan container image; además genera SBOM. |
-| Terraform static validation | [`.github/workflows/terraform.yml`](../.github/workflows/terraform.yml) | PR y push a `main`, sólo cambios `terraform/**` | `contents: read` | Operativa/específica de ruta; no puede ser requerida globalmente porque no corre en todos los PR. |
-| Build & Release | [`.github/workflows/build-release.yml`](../.github/workflows/build-release.yml) | `push` a `main` | `contents: read`, `id-token: write` | Posterior al merge: empaqueta, escanea, genera SBOM, publica/firma en ECR y despliega a EKS. No es gate de merge. |
-| Release | [`.github/workflows/release.yml`](../.github/workflows/release.yml) | tag `v*` | `contents: read`, `packages: write`, `id-token: write` | Posterior a la integración: publica, firma y atestigua una imagen de release. No es gate de merge. |
+| Pull Request CI | [`.github/workflows/pull-request-ci.yml`](../.github/workflows/pull-request-ci.yml) | `pull_request` a `main` | `contents: read` | **Sin mutación. Checks requeridos:** Compile, Unit & Integration Tests, Gitleaks, Semgrep, Trivy SCA, Checkov, Helm Lint, Container Image Security y Quality Gate. El último incluye Hadolint, Trivy de imagen/secretos y SBOM. |
+| Terraform delivery | [`.github/workflows/terraform.yml`](../.github/workflows/terraform.yml) | PR y push a `main`, sólo cambios `terraform/**` | Definido por TRA-42 | Pipeline de infraestructura separado por privilegio y ambiente. Este flujo no se duplica en otros workflows. |
+| Development Delivery | [`.github/workflows/development-delivery.yml`](../.github/workflows/development-delivery.yml) | `push` a `main` con cambios de aplicación, imagen o Helm | `contents: read`, `id-token: write`; environment `development` | Posterior al merge: empaqueta, escanea, genera SBOM, publica/firma en ECR y despliega a EKS de development. La concurrencia evita deploys simultáneos. No es gate de merge. |
+| Production Release | [`.github/workflows/production-release.yml`](../.github/workflows/production-release.yml) | tag protegido `v*` o `workflow_dispatch` con tag `v*` | `contents: read`, `packages: write`, `id-token: write`; environment `production` | Requiere la protección/aprobación configurada en `production`; publica, firma y atestigua la imagen de release. No es gate de merge. |
 | Dependabot Updates | [`.github/dependabot.yml`](../.github/dependabot.yml) | programación gestionada por Dependabot | N/A (configuración de Dependabot) | Abre actualizaciones; sus PRs pasan el mismo `Quality Gate` y revisión humana. |
 
 ### Límites y revisión
@@ -98,10 +97,29 @@ La ausencia de una aprobación obligatoria es una concesión explícita para un
 repositorio de propietario único; se debe restablecer al menos una aprobación
 externa al incorporar colaboradores con capacidad de revisión.
 Los workflows de publicación/despliegue se mantienen fuera del merge gate
-porque dependen de AWS/ECR/EKS y sólo se ejecutan tras `push` a `main`.
+porque dependen de AWS/ECR/EKS y sólo se ejecutan tras un `push` confiable a
+`main` o un tag protegido. Los GitHub Environments son los destinos
+(`development` y `production`), no ramas permanentes. `production` debe exigir
+revisores y restringirse a tags protegidos; el autor no debe autoaprobar cuando
+la configuración del Environment lo impida.
 Cualquier cambio a la regla, a los nombres de checks requeridos o a sus
 triggers debe revisarse junto con esta documentación. GitHub no ofrece una
 regla comodín segura para "todo check futuro": al agregar, renombrar o quitar
 un job que corra en cada PR se debe actualizar explícitamente esta lista. Los
 workflows con filtros de ruta, de `push` o de tags no se incluyen para evitar
 bloquear PRs válidos en los que no se ejecutan.
+
+### Flujo de entrega
+
+```text
+rama corta -> Pull Request a main -> Pull Request CI (sin mutación) -> merge
+                                                                      |
+                                  cambios de aplicación/Helm --------+-> Development Delivery -> environment development
+                                  cambios Terraform -----------------+-> Terraform delivery (TRA-42)
+
+tag protegido v* o despacho con tag -> aprobación environment production -> Production Release
+```
+
+Las tareas periódicas o de mantenimiento deben declararse en workflows
+separados y con permisos mínimos; no se añaden a los triggers de PR o de
+delivery para no crear ejecuciones duplicadas.

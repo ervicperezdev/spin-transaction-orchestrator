@@ -12,6 +12,7 @@ Backend MVP para la orquestación de transacciones. Usa Java 21, Spring Boot, Ma
 - Diseño de triage para CloudTrail, GuardDuty, Security Hub y logs de AWS WAF: `docs/cloud-security-operations.md`
 - Mapeo de controles de cumplimiento, evidencia del repositorio y brechas operativas: `docs/compliance-mapping.md`
 - Limitaciones actuales, roadmap y declaración de uso de IA: `docs/limitations-roadmap-ai.md`
+- Gobierno trunk-based, ambientes y catálogo de workflows: `docs/trunk-based-and-ci-governance.md`
 
 ## Prerrequisitos
 
@@ -138,7 +139,7 @@ logs de Compose y siempre elimina contenedores y volúmenes.
 
 ## Controles de seguridad del contenedor
 
-El workflow `Container security` de GitHub Actions se ejecuta para Pull Requests hacia `main` y para actualizaciones de `main`. Usa versiones fijas de imágenes de herramientas e incluye dos gates independientes:
+El job `Container Image Security` del workflow `Pull Request CI` se ejecuta para cada Pull Request hacia `main`. Usa versiones fijas de imágenes de herramientas e incluye dos gates independientes:
 
 - **Hadolint** evalúa `Dockerfile` con `.hadolint.yaml`. La política falla ante errores y actualmente no ignora reglas. Toda excepción futura debe registrarse en ese archivo con su justificación y revisarse en el PR correspondiente.
 - **Trivy** construye la imagen localmente en el runner, la exporta a un tarball temporal y analiza vulnerabilidades de OS/aplicación y secretos embebidos. El job falla ante cualquier hallazgo `HIGH` o `CRITICAL`, incluidos los no corregidos; el escaneo no recibe credenciales de registry, build secrets ni configuración de la aplicación.
@@ -162,7 +163,7 @@ rm image.tar
 
 No suprimas hallazgos críticos explotables. Si un hallazgo requiere triage temporal, documenta en el PR o issue el paquete, versiones instalada/corregida, alcance, responsable y fecha de remediación; conserva el gate fallido hasta que exista una excepción aprobada y acotada en el tiempo. Nunca pases secretos como argumentos de Docker build ni los incluyas en la imagen.
 
-El workflow `Container security` también genera un SBOM (Software Bill of Materials) en formato SPDX-JSON a partir del mismo tarball usando Syft y lo publica como workflow artifact (`sbom-<sha>`). Para ejecutarlo localmente:
+El mismo job genera un SBOM (Software Bill of Materials) en formato SPDX-JSON a partir del mismo tarball usando Syft y lo publica como artifact del workflow (`sbom-<sha>`). Para ejecutarlo localmente:
 
 ```bash
 docker build --tag spin-transaction-orchestrator:security .
@@ -175,16 +176,16 @@ docker run --rm \
 rm image.tar
 ```
 
-## Firma de imagen y attestación de SBOM (release)
+## Firma de imagen y attestación de SBOM (producción)
 
-El workflow `Release` de GitHub Actions se activa con version tags (`v*`). Construye y publica en `ghcr.io`, después firma la imagen y genera la attestación del SBOM con Cosign usando una identidad OIDC efímera y keyless emitida por GitHub Actions. El repositorio y la imagen no almacenan private keys ni tokens.
+El workflow `Production Release` se activa con un tag protegido `v*` o manualmente indicando ese mismo tag. El GitHub Environment `production` debe requerir aprobación antes de que el job publique en `ghcr.io`, firme la imagen y genere la attestación del SBOM con Cosign usando una identidad OIDC efímera y keyless. El repositorio y la imagen no almacenan claves privadas ni tokens permanentes.
 
 Verifica la firma de una imagen publicada (requiere `cosign`):
 
 ```bash
 cosign verify \
   --certificate-identity-regexp \
-    "https://github.com/ervicperezdev/spin-transaction-orchestrator/.github/workflows/release.yml" \
+    "https://github.com/ervicperezdev/spin-transaction-orchestrator/.github/workflows/production-release.yml" \
   --certificate-oidc-issuer "https://token.actions.githubusercontent.com" \
   ghcr.io/ervicperezdev/spin-transaction-orchestrator:<tag>
 ```
@@ -195,7 +196,7 @@ Verifica y extrae la attestación del SBOM:
 cosign verify-attestation \
   --type spdxjson \
   --certificate-identity-regexp \
-    "https://github.com/ervicperezdev/spin-transaction-orchestrator/.github/workflows/release.yml" \
+    "https://github.com/ervicperezdev/spin-transaction-orchestrator/.github/workflows/production-release.yml" \
   --certificate-oidc-issuer "https://token.actions.githubusercontent.com" \
   ghcr.io/ervicperezdev/spin-transaction-orchestrator:<tag> \
   | jq -r '.payload | @base64d | fromjson | .predicate'
