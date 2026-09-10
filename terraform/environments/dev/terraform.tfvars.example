@@ -19,6 +19,12 @@ rds_backup_retention_period          = 1
 rds_deletion_protection              = false
 rds_multi_az                         = false
 rds_enabled_cloudwatch_logs_exports  = []
+# Teardown safety defaults: preserve data and refuse deletion of a non-empty
+# repository. Use the protected teardown workflow and explicit approval before
+# changing either value for an ephemeral cleanup.
+rds_skip_final_snapshot       = false
+# rds_final_snapshot_identifier = "spin-transaction-orchestrator-dev-final-20260910"
+ecr_force_delete              = false
 # Do not put secret values here. Exact Secrets Manager ARNs may be supplied after review.
 workload_secret_arns = []
 # Terraform does not create secret values. Supply the exact ARN after its value
