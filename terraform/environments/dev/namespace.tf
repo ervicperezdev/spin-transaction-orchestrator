@@ -1,5 +1,5 @@
-# La identidad administradora de plataforma crea el namespace antes del CI.
-# El rol de despliegue solo necesita permisos dentro de este namespace.
+# El plan de PR refresca este recurso con la EKS View access entry; el apply
+# sigue siendo la única identidad que puede modificar el namespace.
 resource "kubernetes_namespace_v1" "application" {
   metadata {
     name = var.application_namespace
