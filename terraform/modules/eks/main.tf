@@ -129,8 +129,16 @@ resource "aws_security_group_rule" "node_from_cluster_alb_webhook" {
 
 resource "aws_launch_template" "node" {
   # checkov:skip=CKV_AWS_341: Hop limit 2 is required for supported EKS pod networking paths that access IMDS; IMDSv2 remains mandatory and instance metadata tags are disabled.
-  name_prefix            = "${var.cluster_name}-node-"
-  vpc_security_group_ids = [aws_security_group.node.id]
+  name_prefix = "${var.cluster_name}-node-"
+  # Managed node groups do not automatically inherit custom security groups
+  # supplied to the EKS control-plane ENIs. Associate the EKS-managed cluster
+  # security group explicitly so the API server can reach kubelet on TCP/10250
+  # for logs, exec and port-forward, while the node SG remains the workload
+  # boundary.
+  vpc_security_group_ids = [
+    aws_security_group.node.id,
+    aws_eks_cluster.this.vpc_config[0].cluster_security_group_id,
+  ]
   metadata_options {
     http_endpoint               = "enabled"
     http_tokens                 = "required"

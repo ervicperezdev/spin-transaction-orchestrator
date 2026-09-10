@@ -88,6 +88,19 @@ Fuente AWS/WAF → Security Hub o SIEM → SOC valida y deduplica
 | WAF: subida de bloqueos o rate limit | regla, URI, IP/ASN, tasa, ALB 4xx/5xx y targets; revisar redacción | bloqueo temporal específico o ajuste de regla aprobado | P2 si afecta clientes o indica ataque; P1 si disponibilidad/fraude activo |
 | ALB/RDS/EKS con señal de seguridad | salud de targets, 5xx, conexiones RDS, eventos de control plane/pods | escalar/aislar/revertir cambio aprobado | P2; P1 si hay indisponibilidad amplia o evidencia de compromiso |
 
+### `kubectl logs`, `exec` o `port-forward` expiran
+
+Si el error apunta a una IP privada de nodo y a TCP/10250, no cambie el nivel de
+logs de la aplicación: el API server no está alcanzando el kubelet. Confirme que
+el pod y el nodo estén `Running`/`Ready`, identifique el `clusterSecurityGroupId`
+con `aws eks describe-cluster`, y verifique las rutas, NACL y reglas de security
+group en ambos sentidos. El nodo debe aceptar TCP/10250 desde el security group
+del control plane, y el Launch Template debe asociar el security group administrado
+por EKS. Después del cambio aprobado, pruebe `kubectl logs`, `kubectl exec` y
+`kubectl port-forward`; no abra 10250 a CIDRs públicos. La aplicación emite JSON
+estructurado a `stdout`, por lo que esos comandos recuperan los logs sin alterar
+el microservicio.
+
 ## Validación previa a operación
 Antes de declarar el diseño operativo, el propietario de la plataforma debe hacer
 un ejercicio controlado que compruebe: llegada de un evento de gestión a la
