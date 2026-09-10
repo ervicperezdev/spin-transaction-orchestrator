@@ -1,0 +1,96 @@
+name: Reconcile Terraform development state
+
+on:
+  workflow_dispatch:
+    inputs:
+      confirm:
+        description: Type RECONCILE_STATE to refresh the state without changing infrastructure.
+        required: true
+        type: string
+
+permissions:
+  contents: read
+  id-token: write
+
+concurrency:
+  group: terraform-development-state
+  cancel-in-progress: false
+
+jobs:
+  reconcile:
+    name: Reconcile approved development state
+    if: github.ref == 'refs/heads/main' && inputs.confirm == 'RECONCILE_STATE'
+    runs-on: ubuntu-latest
+    environment: development
+    env:
+      TF_IN_AUTOMATION: "true"
+      AWS_REGION: ${{ vars.AWS_REGION }}
+      TF_STATE_BUCKET: ${{ vars.TF_STATE_BUCKET }}
+      TF_STATE_REGION: ${{ vars.TF_STATE_REGION }}
+      TF_VARS_CONTENT: ${{ secrets.TF_DEV_TFVARS }}
+      TF_APPLY_ROLE_ARN: ${{ secrets.AWS_TERRAFORM_APPLY_ROLE_ARN }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: hashicorp/setup-terraform@dfe3c3f87815947d99a8997f908cb6525fc44e9e # v4.0.1
+        with:
+          terraform_wrapper: false
+      - name: Check protected environment configuration
+        run: |
+          missing=()
+          for name in AWS_REGION TF_STATE_BUCKET TF_STATE_REGION TF_VARS_CONTENT TF_APPLY_ROLE_ARN; do
+            test -n "${!name}" || missing+=("$name")
+          done
+          if ((${#missing[@]})); then
+            echo "::error::Missing protected Terraform configuration: ${missing[*]}."
+            exit 1
+          fi
+      - name: Configure AWS credentials with OIDC apply role
+        uses: aws-actions/configure-aws-credentials@cbe3b392738ccf3f987d68400dafcf4b0624a56c # v6.2.4
+        with:
+          role-to-assume: ${{ env.TF_APPLY_ROLE_ARN }}
+          aws-region: ${{ vars.AWS_REGION }}
+          audience: sts.amazonaws.com
+      - name: Materialize protected variable file
+        working-directory: terraform/environments/dev
+        run: |
+          umask 077
+          printf '%s' "$TF_VARS_CONTENT" > ci.auto.tfvars
+      - name: Initialize remote backend
+        working-directory: terraform/environments/dev
+        run: |
+          terraform init -input=false -backend-config="bucket=$TF_STATE_BUCKET" -backend-config="key=spin-transaction-orchestrator/dev/terraform.tfstate" -backend-config="region=$TF_STATE_REGION" -backend-config="encrypt=true" -backend-config="use_lockfile=true"
+      - name: Validate configuration
+        run: |
+          terraform fmt -check -recursive terraform
+          terraform -chdir=terraform/environments/dev validate
+      - name: Build and review refresh-only plan
+        working-directory: terraform/environments/dev
+        run: |
+          set +e
+          terraform plan -input=false -no-color -refresh-only -detailed-exitcode -out=reconcile.tfplan -var-file=ci.auto.tfvars >/dev/null
+          result=$?
+          set -e
+          test "$result" -eq 0 || test "$result" -eq 2 || exit "$result"
+          {
+            echo "## Terraform state reconciliation"
+            if test "$result" -eq 0; then
+              echo "No drift was detected; the state was not changed."
+            else
+              echo "The following state entries will be refreshed; no infrastructure will be created, changed, or deleted."
+              terraform show -json reconcile.tfplan | jq -r '
+                (.resource_drift // .resource_changes // [])
+                | sort_by(.address)
+                | .[]
+                | "- `\(.address)`: \(.change.actions | join(", "))"
+              '
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"
+          echo "DRIFT_RESULT=$result" >> "$GITHUB_ENV"
+      - name: Apply approved refresh-only plan to state
+        if: env.DRIFT_RESULT == '2'
+        working-directory: terraform/environments/dev
+        run: terraform apply -input=false reconcile.tfplan
+      - name: Delete transient material
+        if: always()
+        working-directory: terraform/environments/dev
+        run: rm -f ci.auto.tfvars reconcile.tfplan

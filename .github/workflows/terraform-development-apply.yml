@@ -88,6 +88,14 @@ jobs:
                 else
                   echo "- El refresh modificó el estado sin cambios de recurso resumibles."
                 fi
+                echo ""
+                echo "### Recursos afectados"
+                terraform show -json drift.tfplan | jq -r '
+                  (.resource_drift // .resource_changes // [])
+                  | sort_by(.address)
+                  | .[]
+                  | "- `\(.address)`: \(.change.actions | join(", "))"
+                '
               } >> "$GITHUB_STEP_SUMMARY"
               echo "::error::Se detectó drift remoto (exit code 2); el apply se bloqueó. Consulta el resumen no sensible del job."
               rm -f drift.tfplan
