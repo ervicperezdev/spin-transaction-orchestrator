@@ -34,6 +34,12 @@ ni Route 53.
 - Un nodo deja poca holgura para actualizaciones, add-ons y picos. Si hay pods
   pendientes, se permite crecer hasta dos nodos antes de modificar el perfil.
 
+Las exclusiones estáticas de IaC son deliberadamente puntuales: la regla de
+EKS se suprime porque la validación del módulo exige `api` y `audit`, algo que
+el análisis no deduce a través de variables; la regla de logging de RDS se
+suprime únicamente para el valor vacío de `dev` descrito arriba. No son una
+exclusión global del scanner ni una autorización para producción.
+
 Estos riesgos son exclusivos de `dev`, están sujetos a revisión antes de
 promover cambios de arquitectura, y no autorizan rebajar los controles de
 producción.

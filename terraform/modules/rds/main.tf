@@ -122,6 +122,10 @@ resource "aws_security_group" "database" {
   egress = []
 }
 
+# Dev deliberately sets enabled_cloudwatch_logs_exports to [] under TRA-46 to
+# reduce log-ingestion cost. Production retains the module default; the dev
+# risk, rollback and Cost Explorer review are documented in finops-dev-profile.
+# nosemgrep: terraform.aws.security.aws-db-instance-no-logging.aws-db-instance-no-logging
 resource "aws_db_instance" "this" {
   # checkov:skip=CKV2_AWS_69: PostgreSQL TLS is enforced through the attached postgres16 parameter group (rds.force_ssl=1); this graph check does not follow parameter-group settings.
   identifier                          = var.identifier
