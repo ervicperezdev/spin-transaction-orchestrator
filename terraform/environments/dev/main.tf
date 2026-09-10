@@ -82,6 +82,7 @@ module "workload_iam" {
   github_ref                          = var.github_ref
   terraform_state_bucket_name         = var.terraform_state_bucket_name
   terraform_state_key                 = var.terraform_state_key
+  terraform_managed_iam_role_name_prefixes = [local.name, local.cluster_name]
   terraform_apply_managed_policy_arns = var.terraform_apply_managed_policy_arns
   ecr_repository_arn                  = module.ecr.repository_arn
   eks_cluster_arn                     = module.eks.cluster_arn

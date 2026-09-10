@@ -67,7 +67,7 @@ variable "terraform_state_key" {
 
 variable "terraform_apply_managed_policy_arns" {
   type        = set(string)
-  description = "Reviewed account-managed policies with write permissions for the Terraform-managed development infrastructure."
+  description = "Optional reviewed organization-specific policies beyond the module's versioned Terraform provisioner policy."
   default     = []
 }
 
