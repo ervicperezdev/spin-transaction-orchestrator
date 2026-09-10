@@ -288,9 +288,10 @@ resource "aws_iam_role_policy" "terraform_apply_core_mutations" {
 # using AdministratorAccess. Some Create and control-plane APIs do not support
 # resource-level IAM authorization, so those statements must use "*"; they are
 # bounded by service/action and this account's protected GitHub environment.
-#checkov:skip=CKV_AWS_111:Several AWS create/control-plane APIs in this Terraform inventory have no resource-level condition key.
-#checkov:skip=CKV_AWS_356:Wildcard resources are limited to APIs that AWS does not support resource scoping for; no wildcard actions are granted.
 data "aws_iam_policy_document" "terraform_apply_provisioner" {
+  #checkov:skip=CKV_AWS_109:IAM permissions are constrained to environment role prefixes, approved managed policies, and permitted service principals.
+  #checkov:skip=CKV_AWS_111:Several AWS create/control-plane APIs in this Terraform inventory have no resource-level condition key.
+  #checkov:skip=CKV_AWS_356:Wildcard resources are limited to APIs that AWS does not support resource scoping for; no wildcard actions are granted.
   statement {
     sid = "ManageVpcAndEc2Network"
     actions = [
