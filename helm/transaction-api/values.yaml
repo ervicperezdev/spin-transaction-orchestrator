@@ -26,8 +26,10 @@ ingress:
     alb.ingress.kubernetes.io/listen-ports: '[{"HTTP": 80}, {"HTTPS": 443}]'
     alb.ingress.kubernetes.io/ssl-redirect: "443"
     alb.ingress.kubernetes.io/certificate-arn: "REPLACE_WITH_ACM_ARN"
-    alb.ingress.kubernetes.io/wafv2-acl-arn: "REPLACE_WITH_WAF_ACL_ARN"
     alb.ingress.kubernetes.io/security-groups: "REPLACE_WITH_ALB_SECURITY_GROUP_ID"
+  waf:
+    enabled: true
+    aclArn: "REPLACE_WITH_WAF_ACL_ARN"
   tls: []
 
 resources:
