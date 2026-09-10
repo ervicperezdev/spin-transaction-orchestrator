@@ -121,7 +121,9 @@ data "aws_iam_policy_document" "github_terraform_plan_trust" {
     condition {
       test     = "StringEquals"
       variable = "token.actions.githubusercontent.com:sub"
-      values   = [local.github_plan_subject]
+      # PR plans and trusted main plans share the same read-only role. The
+      # latter creates the exact artifact that a protected apply job uses.
+      values = [local.github_plan_subject, local.github_subject]
     }
   }
 }
