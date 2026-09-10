@@ -18,6 +18,7 @@ Los cuerpos y los motivos de rechazo están prohibidos en registros, métricas y
 | `payment.provider.requests` | Counter | `outcome`: `approved`, `rejected`, `http_error`, `unavailable`, `invalid_response` | Provider availability and business-result rate | No transaction or provider identifiers |
 | `payment.provider.request.duration` | Timer | Same bounded `outcome` | Provider latency by result class | No request payload or URL |
 | `payment_provider_request_completed` | Structured log event | `traceId` MDC field, `outcome` | Correlate a provider attempt to the inbound request | No exception stack, status body, or financial fields |
+| `http_request_completed` | Structured access log | `traceId`, HTTP method, URI path and status | Confirm requests to application and actuator endpoints reached the pod | Never logs query strings, headers, bodies, client IPs, credentials or transaction data |
 | `X-Correlation-ID` | Response header / MDC `traceId` | UUID only; supplied valid UUID is echoed, otherwise generated | Request-to-log correlation | Header values are validated to avoid log injection |
 | `/actuator/health` | Health probe | Overall status only | ALB/Kubernetes liveness and readiness | Component details are disabled |
 | `/actuator/metrics` | Actuator metric discovery | Metric names and meter measurements | Restricted operational metric readout | `/actuator/env` and other sensitive endpoints remain unexposed |
@@ -25,6 +26,11 @@ Los cuerpos y los motivos de rechazo están prohibidos en registros, métricas y
 Los registros de la consola utilizan el formato JSON estructurado Logstash de Spring Boot. el emitido
 `traceId` es un identificador de correlación, no un seguimiento distribuido de OpenTelemetry;
 La propagación/exportación de OTel se difiere explícitamente a P3.
+
+Cada petición, incluidas `/actuator/health`, `/actuator/health/liveness` y
+`/actuator/health/readiness`, emite `http_request_completed` a stdout al finalizar. El
+evento es un access log deliberadamente mínimo: conserva método, path y código HTTP para
+diagnóstico, sin registrar query strings ni datos que puedan contener secretos.
 ## Señales de AWS y Kubernetes
 | Source | Signal family | Use | Ownership / status |
 | --- | --- | --- | --- |
