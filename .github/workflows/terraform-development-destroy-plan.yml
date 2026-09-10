@@ -1,0 +1,122 @@
+name: Terraform destroy plan (development)
+
+on:
+  workflow_dispatch:
+    inputs:
+      ephemeral_cleanup:
+        description: "Type PLAN-DEV-TEARDOWN to acknowledge this is a plan-only, destructive-operation review."
+        required: true
+        type: string
+      skip_final_snapshot:
+        description: "Set true only when a responsible reviewer has approved loss of the final RDS snapshot."
+        required: true
+        default: false
+        type: boolean
+      delete_ecr_images:
+        description: "Set true only when a responsible reviewer has approved deletion of every ECR image."
+        required: true
+        default: false
+        type: boolean
+
+permissions:
+  contents: read
+  id-token: write
+
+concurrency:
+  group: terraform-development-state
+  cancel-in-progress: false
+
+jobs:
+  destroy-plan:
+    name: Generate protected destroy plan (no mutation)
+    runs-on: ubuntu-latest
+    # Configure required reviewers for this Environment. This workflow has no
+    # destroy apply job; a separately approved, human-operated run is required.
+    environment: development-teardown-plan
+    env:
+      TF_IN_AUTOMATION: "true"
+      AWS_REGION: ${{ vars.AWS_REGION }}
+      TF_STATE_BUCKET: ${{ vars.TF_STATE_BUCKET }}
+      TF_STATE_REGION: ${{ vars.TF_STATE_REGION }}
+      TF_VARS_CONTENT: ${{ secrets.TF_DEV_TFVARS }}
+      TF_PLAN_ROLE_ARN: ${{ secrets.AWS_TERRAFORM_PLAN_ROLE_ARN }}
+      EKS_CLUSTER_NAME: spin-transaction-orchestrator-cluster
+      ECR_REPOSITORY_NAME: spin-transaction-orchestrator
+      RDS_IDENTIFIER: spin-transaction-orchestrator-dev
+      RDS_SKIP_FINAL_SNAPSHOT: ${{ inputs.skip_final_snapshot }}
+      ECR_FORCE_DELETE: ${{ inputs.delete_ecr_images }}
+      RDS_FINAL_SNAPSHOT_IDENTIFIER: spin-transaction-orchestrator-dev-final-${{ github.run_id }}
+
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: hashicorp/setup-terraform@dfe3c3f87815947d99a8997f908cb6525fc44e9e # v4.0.1
+        with:
+          terraform_wrapper: false
+      - name: Require explicit plan acknowledgement
+        run: test "${{ inputs.ephemeral_cleanup }}" = "PLAN-DEV-TEARDOWN"
+      - name: Check protected configuration
+        run: |
+          missing=()
+          for name in AWS_REGION TF_STATE_BUCKET TF_STATE_REGION TF_VARS_CONTENT TF_PLAN_ROLE_ARN; do
+            test -n "${!name}" || missing+=("$name")
+          done
+          ((${#missing[@]} == 0)) || { echo "::error::Missing configuration: ${missing[*]}"; exit 1; }
+      - name: Configure AWS credentials with read-only plan role
+        uses: aws-actions/configure-aws-credentials@cbe3b392738ccf3f987d68400dafcf4b0624a56c # v6.2.4
+        with:
+          role-to-assume: ${{ env.TF_PLAN_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+          audience: sts.amazonaws.com
+          retry-max-attempts: 1
+      - name: Materialize protected variables and teardown choices
+        working-directory: terraform/environments/dev
+        run: |
+          umask 077
+          printf '%s' "$TF_VARS_CONTENT" > ci.auto.tfvars
+          {
+            echo "rds_skip_final_snapshot = $RDS_SKIP_FINAL_SNAPSHOT"
+            echo "rds_final_snapshot_identifier = \"$RDS_FINAL_SNAPSHOT_IDENTIFIER\""
+            echo "ecr_force_delete = $ECR_FORCE_DELETE"
+          } > teardown.auto.tfvars
+      - name: Initialize remote backend
+        working-directory: terraform/environments/dev
+        run: |
+          terraform init -input=false \
+            -backend-config="bucket=$TF_STATE_BUCKET" \
+            -backend-config="key=spin-transaction-orchestrator/dev/terraform.tfstate" \
+            -backend-config="region=$TF_STATE_REGION" \
+            -backend-config="encrypt=true" \
+            -backend-config="use_lockfile=true"
+      - name: Run read-only teardown preflight
+        working-directory: terraform/environments/dev
+        run: ../../../scripts/terraform-dev-teardown-preflight.sh
+      - name: Generate destroy plan only
+        working-directory: terraform/environments/dev
+        run: terraform plan -destroy -input=false -no-color -out=destroy.tfplan -var-file=ci.auto.tfvars -var-file=teardown.auto.tfvars
+      - name: Publish non-sensitive destroy counts
+        working-directory: terraform/environments/dev
+        run: |
+          terraform show -json destroy.tfplan > "$RUNNER_TEMP/destroy-plan.json"
+          delete_count=$(jq '[.resource_changes[]? | select(.change.actions == ["delete"])] | length' "$RUNNER_TEMP/destroy-plan.json")
+          replace_count=$(jq '[.resource_changes[]? | select((.change.actions | index("delete")) and (.change.actions | index("create")))] | length' "$RUNNER_TEMP/destroy-plan.json")
+          {
+            echo "## Development destroy plan — no mutation"
+            echo
+            echo "| Action | Resources |"
+            echo "|---|---:|"
+            echo "| Delete | $delete_count |"
+            echo "| Replace | $replace_count |"
+            echo
+            echo "Review the protected artifact and obtain a separate explicit human approval before any destroy apply. This workflow cannot apply a destroy."
+          } >> "$GITHUB_STEP_SUMMARY"
+      - name: Retain protected destroy plan
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: terraform-development-destroy-plan-${{ github.run_id }}
+          path: terraform/environments/dev/destroy.tfplan
+          retention-days: 7
+          if-no-files-found: error
+      - name: Delete transient material
+        if: always()
+        working-directory: terraform/environments/dev
+        run: rm -f ci.auto.tfvars teardown.auto.tfvars destroy.tfplan

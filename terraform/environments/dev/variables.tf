@@ -178,3 +178,19 @@ variable "rds_enabled_cloudwatch_logs_exports" {
   description = "CloudWatch PostgreSQL log exports; disabled in dev to reduce ingestion."
   default     = []
 }
+variable "rds_skip_final_snapshot" {
+  type        = bool
+  description = "Keep false by default so dev teardown preserves a final database snapshot. Set true only for an approved ephemeral cleanup."
+  default     = false
+}
+variable "rds_final_snapshot_identifier" {
+  type        = string
+  description = "Optional unique final snapshot identifier. The teardown preflight rejects an existing name before any AWS mutation."
+  default     = null
+  nullable    = true
+}
+variable "ecr_force_delete" {
+  type        = bool
+  description = "Keep false by default so a non-empty ECR repository blocks deletion. Set true only for an approved ephemeral cleanup that may erase images."
+  default     = false
+}

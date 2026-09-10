@@ -29,6 +29,11 @@ terraform plan -var-file=terraform.tfvars
 
 ## Pipeline de entrega Terraform
 
+Para desmontar `dev`, consulte el [runbook de teardown](../docs/dev-teardown-runbook.md).
+El workflow manual `Terraform destroy plan (development)` solo ejecuta
+preflight y `terraform plan -destroy` bajo el Environment protegido
+`development-teardown-plan`; no ejecuta destroy apply.
+
 Los workflows no aceptan credenciales AWS estáticas ni archivos `backend.hcl`.
 Todos usan OIDC de GitHub y construyen la configuración S3 en memoria. El
 bucket se debe crear fuera de este estado (bootstrap) con **versioning**,

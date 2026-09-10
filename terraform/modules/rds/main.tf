@@ -28,6 +28,22 @@ variable "enabled_cloudwatch_logs_exports" {
   description = "PostgreSQL log types exported to CloudWatch."
   default     = ["postgresql", "upgrade"]
 }
+variable "skip_final_snapshot" {
+  type        = bool
+  description = "Whether deletion skips the final DB snapshot. Keep false unless an approved ephemeral-environment teardown explicitly accepts data loss."
+  default     = false
+}
+variable "final_snapshot_identifier" {
+  type        = string
+  description = "Name for the final DB snapshot when skip_final_snapshot is false. Supply a new value when a prior teardown created the same snapshot."
+  default     = null
+  nullable    = true
+
+  validation {
+    condition     = var.skip_final_snapshot || var.final_snapshot_identifier == null || can(regex("^[a-z][a-z0-9-]{0,254}$", var.final_snapshot_identifier))
+    error_message = "final_snapshot_identifier must start with a letter and contain only lowercase letters, digits, and hyphens."
+  }
+}
 
 data "aws_caller_identity" "current" {}
 
@@ -145,8 +161,8 @@ resource "aws_db_instance" "this" {
   manage_master_user_password         = true
   db_subnet_group_name                = aws_db_subnet_group.this.name
   vpc_security_group_ids              = [aws_security_group.database.id]
-  skip_final_snapshot                 = false
-  final_snapshot_identifier           = "${var.identifier}-final"
+  skip_final_snapshot                 = var.skip_final_snapshot
+  final_snapshot_identifier           = var.skip_final_snapshot ? null : coalesce(var.final_snapshot_identifier, "${var.identifier}-final")
   enabled_cloudwatch_logs_exports     = var.enabled_cloudwatch_logs_exports
   copy_tags_to_snapshot               = true
   auto_minor_version_upgrade          = true

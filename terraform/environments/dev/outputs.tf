@@ -1,4 +1,5 @@
 output "ecr_repository_url" { value = module.ecr.repository_url }
+output "vpc_id" { value = module.vpc.vpc_id }
 output "eks_cluster_name" { value = module.eks.cluster_name }
 output "application_hostname" { value = var.application_hostname }
 output "rds_endpoint" { value = module.rds.endpoint }

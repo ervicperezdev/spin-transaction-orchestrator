@@ -41,6 +41,7 @@ module "addons" {
 module "ecr" {
   source          = "../../modules/ecr"
   repository_name = var.repository_name
+  force_delete    = var.ecr_force_delete
 }
 
 module "eks" {
@@ -72,6 +73,8 @@ module "rds" {
   deletion_protection             = var.rds_deletion_protection
   multi_az                        = var.rds_multi_az
   enabled_cloudwatch_logs_exports = var.rds_enabled_cloudwatch_logs_exports
+  skip_final_snapshot             = var.rds_skip_final_snapshot
+  final_snapshot_identifier       = var.rds_final_snapshot_identifier
 }
 
 module "workload_iam" {
