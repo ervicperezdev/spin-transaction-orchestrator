@@ -111,6 +111,23 @@ Terraform instala add-ons y recursos Helm cluster-scoped. Esta autorización es
 para la identidad Terraform; el rol de entrega de la aplicación conserva su
 acceso limitado al namespace `transaction-api`.
 
+El rol de plan recibe una access entry distinta con `AmazonEKSViewPolicy` de
+alcance cluster. Es necesaria porque el provider Kubernetes refresca el
+namespace y los recursos Helm durante el plan; es sólo lectura y no permite
+leer Secrets ni mutar el clúster. Como el propio plan no puede crear su acceso,
+en un clúster ya existente la entrada debe bootstrapearse una vez con una
+identidad administradora antes de ejecutar el primer PR plan:
+
+```bash
+aws eks create-access-entry --region us-east-1 --cluster-name spin-cluster \
+  --principal-arn arn:aws:iam::911167887101:role/spin-dev-transaction-api-terraform-plan \
+  --type STANDARD
+aws eks associate-access-policy --region us-east-1 --cluster-name spin-cluster \
+  --principal-arn arn:aws:iam::911167887101:role/spin-dev-transaction-api-terraform-plan \
+  --policy-arn arn:aws:eks::aws:cluster-access-policy/AmazonEKSViewPolicy \
+  --access-scope type=cluster
+```
+
 En GitHub, configure `development` y `production` con secrets/variables
 restringidos; en `production` exija reviewers, impida que el autor se
 autoapruebe y limite despliegues a `main` y tags protegidos. Proteja también

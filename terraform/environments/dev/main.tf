@@ -49,6 +49,7 @@ module "eks" {
   allowed_control_plane_cidrs = var.allowed_control_plane_cidrs
   github_deploy_role_arn      = module.workload_iam.github_deploy_role_arn
   terraform_apply_role_arn    = module.workload_iam.github_terraform_apply_role_arn
+  terraform_plan_role_arn     = module.workload_iam.github_terraform_plan_role_arn
   cluster_admin_principal_arn = var.cluster_admin_principal_arn
 }
 

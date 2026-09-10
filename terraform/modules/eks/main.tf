@@ -6,6 +6,10 @@ variable "terraform_apply_role_arn" {
   type        = string
   description = "OIDC Terraform apply role that manages EKS add-ons through the Kubernetes and Helm providers."
 }
+variable "terraform_plan_role_arn" {
+  type        = string
+  description = "OIDC Terraform plan role allowed to read Kubernetes resources during a PR refresh."
+}
 variable "cluster_admin_principal_arn" {
   type        = string
   description = "IAM principal allowed to administer the cluster and install platform addons."
@@ -228,6 +232,24 @@ resource "aws_eks_access_policy_association" "terraform_apply" {
   cluster_name  = aws_eks_access_entry.terraform_apply.cluster_name
   principal_arn = aws_eks_access_entry.terraform_apply.principal_arn
   policy_arn    = "arn:aws:eks::aws:cluster-access-policy/AmazonEKSClusterAdminPolicy"
+
+  access_scope {
+    type = "cluster"
+  }
+}
+
+# A plan refreshes Kubernetes and Helm resources, but must not alter them. The
+# EKS view policy deliberately excludes secret reads and provides no mutation.
+resource "aws_eks_access_entry" "terraform_plan" {
+  cluster_name  = aws_eks_cluster.this.name
+  principal_arn = var.terraform_plan_role_arn
+  type          = "STANDARD"
+}
+
+resource "aws_eks_access_policy_association" "terraform_plan" {
+  cluster_name  = aws_eks_access_entry.terraform_plan.cluster_name
+  principal_arn = aws_eks_access_entry.terraform_plan.principal_arn
+  policy_arn    = "arn:aws:eks::aws:cluster-access-policy/AmazonEKSViewPolicy"
 
   access_scope {
     type = "cluster"
