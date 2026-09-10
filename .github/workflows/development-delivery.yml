@@ -1,4 +1,4 @@
-name: Build & Release
+name: Development Delivery
 
 # Build once → Scan → SBOM → Push → Sign → Deploy
 #
@@ -10,6 +10,14 @@ on:
   push:
     branches:
       - main
+    paths:
+      - 'src/**'
+      - 'pom.xml'
+      - 'mvnw'
+      - '.mvn/**'
+      - 'Dockerfile'
+      - '.dockerignore'
+      - 'helm/**'
 
 env:
   IMAGE_NAME: spin-transaction-orchestrator
@@ -17,6 +25,10 @@ env:
 permissions:
   contents: read
   id-token: write
+
+concurrency:
+  group: development-delivery
+  cancel-in-progress: false
 
 jobs:
   # ──────────────────────────────────────────────────────────────────────────
@@ -184,9 +196,10 @@ jobs:
   # DEPLOY TO EKS
   # ──────────────────────────────────────────────────────────────────────────
   deploy-eks:
-    name: Deploy to EKS
+    name: Deploy to development EKS
     needs: build-and-push
     runs-on: ubuntu-latest
+    environment: development
 
     steps:
       - name: Checkout repository
