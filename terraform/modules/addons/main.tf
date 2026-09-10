@@ -47,9 +47,9 @@ resource "aws_iam_role" "load_balancer_controller" {
   assume_role_policy = data.aws_iam_policy_document.pod_identity_trust.json
 }
 
-# The controller's API surface is AWS-managed infrastructure rather than app
-# data. Tag conditions bind create operations to controller-owned resources.
 data "aws_iam_policy_document" "load_balancer_controller" {
+  # checkov:skip=CKV_AWS_111: AWS Load Balancer Controller needs AWS APIs that do not support resource-level authorization; controller-created resources remain restricted by its Kubernetes service account and ownership tags.
+  # checkov:skip=CKV_AWS_356: Several required Describe and ELBv2 controller actions only support Resource="*"; this follows the AWS controller IAM model.
   statement {
     effect = "Allow"
     actions = [
@@ -129,6 +129,7 @@ resource "aws_iam_role" "external_dns" {
 }
 
 data "aws_iam_policy_document" "external_dns" {
+  # checkov:skip=CKV_AWS_356: Route53 ListHostedZones/ListHostedZonesByName have no hosted-zone resource scope; writes remain limited to hosted_zone_arn.
   statement {
     effect    = "Allow"
     actions   = ["route53:ChangeResourceRecordSets"]

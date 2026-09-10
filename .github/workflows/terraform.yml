@@ -1,32 +1,107 @@
-name: Terraform static validation
+name: Terraform plan (PR)
 
 on:
   pull_request:
-    paths: ["terraform/**"]
-  push:
     branches: [main]
     paths: ["terraform/**"]
 
+# The plan role is read-only and distinct from every apply role.  `id-token`
+# is scoped to this workflow; no static AWS credential is ever supplied.
 permissions:
   contents: read
+  id-token: write
+
+concurrency:
+  group: terraform-plan-pr-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
 
 jobs:
-  static-validation:
+  plan:
+    name: Terraform plan (no mutation)
+    # Do not give an AWS token to code contributed by an untrusted fork.
+    if: github.event.pull_request.head.repo.full_name == github.repository
     runs-on: ubuntu-latest
+    env:
+      TF_IN_AUTOMATION: "true"
+      AWS_REGION: ${{ vars.AWS_REGION }}
+      TF_STATE_BUCKET: ${{ vars.TF_STATE_BUCKET }}
+      TF_STATE_REGION: ${{ vars.TF_STATE_REGION }}
+      TF_VARS_CONTENT: ${{ secrets.TF_DEV_TFVARS }}
+      TF_PLAN_ROLE_ARN: ${{ secrets.AWS_TERRAFORM_PLAN_ROLE_ARN }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: hashicorp/setup-terraform@dfe3c3f87815947d99a8997f908cb6525fc44e9e # v4.0.1
         with:
           terraform_wrapper: false
-      - name: Format check
-        run: terraform fmt -check -recursive terraform
-      - name: Initialize without remote state
+      - name: Check protected CI configuration
+        run: |
+          missing=()
+          for name in AWS_REGION TF_STATE_BUCKET TF_STATE_REGION TF_VARS_CONTENT TF_PLAN_ROLE_ARN; do
+            test -n "${!name}" || missing+=("$name")
+          done
+          if ((${#missing[@]})); then
+            echo "::error::Missing protected Terraform configuration: ${missing[*]}. Configure the named GitHub variable/secret before rerunning."
+            exit 1
+          fi
+      - name: Record non-sensitive OIDC claims
+        uses: actions/github-script@d746ffe35508b1917358783b479e04febd2b8f71 # v9.0.0
+        with:
+          script: |
+            const token = await core.getIDToken('sts.amazonaws.com');
+            const claims = JSON.parse(Buffer.from(token.split('.')[1], 'base64url').toString());
+            core.notice(`OIDC issuer=${claims.iss}; audience=${claims.aud}; subject=${claims.sub}; repository=${claims.repository}; event=${claims.event_name}; ref=${claims.ref}`);
+      - name: Configure AWS credentials with OIDC plan role
+        uses: aws-actions/configure-aws-credentials@cbe3b392738ccf3f987d68400dafcf4b0624a56c # v6.2.4
+        with:
+          role-to-assume: ${{ env.TF_PLAN_ROLE_ARN }}
+          aws-region: ${{ vars.AWS_REGION }}
+          audience: sts.amazonaws.com
+          retry-max-attempts: 1
+      - name: Materialize protected variable file
         working-directory: terraform/environments/dev
-        run: terraform init -backend=false -input=false
-      - name: Validate
+        run: |
+          umask 077
+          printf '%s' "$TF_VARS_CONTENT" > ci.auto.tfvars
+      - name: Initialize remote backend
         working-directory: terraform/environments/dev
-        run: terraform validate
-      - name: Checkov IaC scan
+        run: |
+          terraform init -input=false \
+            -backend-config="bucket=$TF_STATE_BUCKET" \
+            -backend-config="key=spin-transaction-orchestrator/dev/terraform.tfstate" \
+            -backend-config="region=$TF_STATE_REGION" \
+            -backend-config="encrypt=true" \
+            -backend-config="use_lockfile=true"
+      - name: Format and validate
+        run: |
+          terraform fmt -check -recursive terraform
+          terraform -chdir=terraform/environments/dev validate
+      - name: Checkov IaC security gate
         run: |
           pip install checkov --quiet
-          checkov -d terraform --quiet --soft-fail
+          checkov -d terraform --quiet
+      - name: Generate plan
+        working-directory: terraform/environments/dev
+        run: |
+          # Do not render the human plan: it may contain operational metadata.
+          terraform plan -input=false -no-color -out=tfplan -var-file=ci.auto.tfvars >/dev/null
+      - name: Publish non-sensitive plan summary
+        if: always()
+        working-directory: terraform/environments/dev
+        run: |
+          if test -f tfplan; then
+            terraform show -json tfplan | jq -r '
+              .resource_changes // []
+              | group_by(.change.actions | join(","))
+              | map("- \(length) \(.[0].change.actions | join(", "))")
+              | .[]' > "$RUNNER_TEMP/terraform-plan-summary.md"
+            {
+              echo "## Terraform plan (sin mutación)"
+              cat "$RUNNER_TEMP/terraform-plan-summary.md"
+              echo
+              echo "El detalle de atributos y valores sensibles no se publica."
+            } >> "$GITHUB_STEP_SUMMARY"
+          fi
+      - name: Delete transient plan
+        if: always()
+        working-directory: terraform/environments/dev
+        run: rm -f tfplan ci.auto.tfvars

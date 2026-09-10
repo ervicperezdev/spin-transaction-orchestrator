@@ -2,6 +2,13 @@ variable "role_name" { type = string }
 variable "secret_resource_arns" { type = set(string) }
 variable "github_repository" { type = string }
 variable "github_ref" { type = string }
+variable "terraform_state_bucket_name" { type = string }
+variable "terraform_state_key" { type = string }
+variable "terraform_apply_managed_policy_arns" {
+  type        = set(string)
+  description = "Account-managed, reviewed policies granting Terraform only the infrastructure write actions it needs."
+  default     = []
+}
 variable "ecr_repository_arn" { type = string }
 variable "eks_cluster_arn" { type = string }
 variable "eks_oidc_provider_arn" { type = string }
@@ -10,9 +17,14 @@ variable "kubernetes_namespace" { type = string }
 variable "kubernetes_service_account" { type = string }
 
 locals {
-  github_oidc_url = "https://token.actions.githubusercontent.com"
-  github_subject  = "repo:${var.github_repository}:ref:${var.github_ref}"
-  irsa_subject    = "system:serviceaccount:${var.kubernetes_namespace}:${var.kubernetes_service_account}"
+  github_oidc_url      = "https://token.actions.githubusercontent.com"
+  github_subject       = "repo:${var.github_repository}:ref:${var.github_ref}"
+  github_plan_subject  = "repo:${var.github_repository}:pull_request"
+  github_apply_subject = "repo:${var.github_repository}:environment:development"
+  irsa_subject         = "system:serviceaccount:${var.kubernetes_namespace}:${var.kubernetes_service_account}"
+  state_bucket_arn     = "arn:aws:s3:::${var.terraform_state_bucket_name}"
+  state_object_arn     = "arn:aws:s3:::${var.terraform_state_bucket_name}/${var.terraform_state_key}"
+  state_lock_arn       = "arn:aws:s3:::${var.terraform_state_bucket_name}/${var.terraform_state_key}.tflock"
 }
 
 # GitHub's public OIDC issuer. This provider is account-wide; manage it in one
@@ -42,7 +54,9 @@ data "aws_iam_policy_document" "github_actions_trust" {
     condition {
       test     = "StringEquals"
       variable = "token.actions.githubusercontent.com:sub"
-      values   = [local.github_subject]
+      # The same application role is used by the build job on main and the
+      # deployment job protected by the development Environment.
+      values = [local.github_subject, local.github_apply_subject]
     }
   }
 }
@@ -87,6 +101,145 @@ resource "aws_iam_role_policy" "github_deploy" {
   name   = "push-image-and-discover-cluster"
   role   = aws_iam_role.github_deploy.id
   policy = data.aws_iam_policy_document.github_deploy.json
+}
+
+# A PR can read infrastructure to calculate a plan, but it cannot write the
+# state. It can only create/delete the short-lived S3 native lock object.
+data "aws_iam_policy_document" "github_terraform_plan_trust" {
+  statement {
+    effect  = "Allow"
+    actions = ["sts:AssumeRoleWithWebIdentity"]
+    principals {
+      type        = "Federated"
+      identifiers = [aws_iam_openid_connect_provider.github_actions.arn]
+    }
+    condition {
+      test     = "StringEquals"
+      variable = "token.actions.githubusercontent.com:aud"
+      values   = ["sts.amazonaws.com"]
+    }
+    condition {
+      test     = "StringEquals"
+      variable = "token.actions.githubusercontent.com:sub"
+      values   = [local.github_plan_subject]
+    }
+  }
+}
+
+resource "aws_iam_role" "github_terraform_plan" {
+  name               = "${var.role_name}-terraform-plan"
+  assume_role_policy = data.aws_iam_policy_document.github_terraform_plan_trust.json
+}
+
+data "aws_iam_policy_document" "terraform_plan_state" {
+  statement {
+    effect    = "Allow"
+    actions   = ["s3:ListBucket", "s3:GetBucketVersioning", "s3:GetEncryptionConfiguration"]
+    resources = [local.state_bucket_arn]
+    condition {
+      test     = "StringLike"
+      variable = "s3:prefix"
+      values   = [var.terraform_state_key, "${var.terraform_state_key}.tflock"]
+    }
+  }
+  statement {
+    effect    = "Allow"
+    actions   = ["s3:GetObject", "s3:GetObjectVersion"]
+    resources = [local.state_object_arn]
+  }
+  statement {
+    effect    = "Allow"
+    actions   = ["s3:GetObject", "s3:PutObject", "s3:DeleteObject"]
+    resources = [local.state_lock_arn]
+  }
+}
+
+resource "aws_iam_role_policy" "terraform_plan_state" {
+  name   = "read-state-and-manage-lock"
+  role   = aws_iam_role.github_terraform_plan.id
+  policy = data.aws_iam_policy_document.terraform_plan_state.json
+}
+
+# Terraform refresh invokes read APIs that ViewOnlyAccess intentionally omits,
+# including resource tags, IAM roles and several EKS/ECR/EC2 descriptions.
+# ReadOnlyAccess grants no write actions; state writes remain restricted to the
+# exact lock object in terraform_plan_state above.
+resource "aws_iam_role_policy_attachment" "terraform_plan_read_only" {
+  role       = aws_iam_role.github_terraform_plan.name
+  policy_arn = "arn:aws:iam::aws:policy/ReadOnlyAccess"
+}
+
+data "aws_iam_policy_document" "github_terraform_apply_trust" {
+  statement {
+    effect  = "Allow"
+    actions = ["sts:AssumeRoleWithWebIdentity"]
+    principals {
+      type        = "Federated"
+      identifiers = [aws_iam_openid_connect_provider.github_actions.arn]
+    }
+    condition {
+      test     = "StringEquals"
+      variable = "token.actions.githubusercontent.com:aud"
+      values   = ["sts.amazonaws.com"]
+    }
+    condition {
+      test     = "StringEquals"
+      variable = "token.actions.githubusercontent.com:sub"
+      values   = [local.github_apply_subject]
+    }
+  }
+}
+
+resource "aws_iam_role" "github_terraform_apply" {
+  name               = "${var.role_name}-terraform-apply"
+  assume_role_policy = data.aws_iam_policy_document.github_terraform_apply_trust.json
+}
+
+# Only the apply role can update the state itself. Both state and lock are
+# limited to the exact key configured for this environment.
+data "aws_iam_policy_document" "terraform_apply_state" {
+  statement {
+    effect    = "Allow"
+    actions   = ["s3:ListBucket", "s3:GetBucketVersioning", "s3:GetEncryptionConfiguration"]
+    resources = [local.state_bucket_arn]
+    condition {
+      test     = "StringLike"
+      variable = "s3:prefix"
+      values   = [var.terraform_state_key, "${var.terraform_state_key}.tflock"]
+    }
+  }
+  statement {
+    effect    = "Allow"
+    actions   = ["s3:GetObject", "s3:GetObjectVersion", "s3:PutObject"]
+    resources = [local.state_object_arn]
+  }
+  statement {
+    effect    = "Allow"
+    actions   = ["s3:GetObject", "s3:PutObject", "s3:DeleteObject"]
+    resources = [local.state_lock_arn]
+  }
+}
+
+resource "aws_iam_role_policy" "terraform_apply_state" {
+  name   = "read-write-state-and-lock"
+  role   = aws_iam_role.github_terraform_apply.id
+  policy = data.aws_iam_policy_document.terraform_apply_state.json
+}
+
+# Apply must perform the same complete refresh before creating or changing
+# resources. Its additional capabilities are still supplied separately below
+# as reviewed provisioning policies, not by this read-only baseline.
+resource "aws_iam_role_policy_attachment" "terraform_apply_read_only" {
+  role       = aws_iam_role.github_terraform_apply.name
+  policy_arn = "arn:aws:iam::aws:policy/ReadOnlyAccess"
+}
+
+# Infrastructure write permissions are supplied as approved, account-managed
+# policies rather than silently granting AdministratorAccess.
+resource "aws_iam_role_policy_attachment" "terraform_apply_capabilities" {
+  for_each   = var.terraform_apply_managed_policy_arns
+  role       = aws_iam_role.github_terraform_apply.name
+  policy_arn = each.value
 }
 
 data "aws_iam_policy_document" "workload_trust" {
@@ -142,3 +295,5 @@ resource "aws_iam_role_policy" "secrets" {
 
 output "role_arn" { value = aws_iam_role.workload.arn }
 output "github_deploy_role_arn" { value = aws_iam_role.github_deploy.arn }
+output "github_terraform_plan_role_arn" { value = aws_iam_role.github_terraform_plan.arn }
+output "github_terraform_apply_role_arn" { value = aws_iam_role.github_terraform_apply.arn }

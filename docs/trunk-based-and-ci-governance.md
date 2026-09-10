@@ -84,7 +84,9 @@ individuales hacen visible y obligatorio cada resultado en GitHub.
 | Workflow | Archivo | Disparador | Permisos declarados | Rol frente al merge |
 | --- | --- | --- | --- | --- |
 | Pull Request CI | [`.github/workflows/pull-request-ci.yml`](../.github/workflows/pull-request-ci.yml) | `pull_request` a `main` | `contents: read` | **Sin mutación. Checks requeridos:** Compile, Unit & Integration Tests, Gitleaks, Semgrep, Trivy SCA, Checkov, Helm Lint, Container Image Security y Quality Gate. El último incluye Hadolint, Trivy de imagen/secretos y SBOM. |
-| Terraform delivery | [`.github/workflows/terraform.yml`](../.github/workflows/terraform.yml) | PR y push a `main`, sólo cambios `terraform/**` | Definido por TRA-42 | Pipeline de infraestructura separado por privilegio y ambiente. Este flujo no se duplica en otros workflows. |
+| Terraform plan (PR) | [`.github/workflows/terraform.yml`](../.github/workflows/terraform.yml) | PR interno a `main`, sólo cambios `terraform/**` | `contents: read`, `id-token: write` | Usa un rol OIDC read-only y backend remoto; muestra solo un resumen no sensible y no puede aplicar. Debe ser check requerido para rutas Terraform. |
+| Terraform apply (development) | [`.github/workflows/terraform-development-apply.yml`](../.github/workflows/terraform-development-apply.yml) | push a `main`, sólo cambios `terraform/**` | `contents: read`, `id-token: write` | Environment `development`, rol OIDC apply separado, lock/concurrencia por state, detección de drift y aplicación del mismo plan conservado como artifact. |
+| Terraform apply (production) | [`.github/workflows/terraform-production-apply.yml`](../.github/workflows/terraform-production-apply.yml) | manual con ref explícito | `contents: read`, `id-token: write` | El plan usa rol read-only; el apply exacto se bloquea tras reviewers del Environment `production`, con rol separado y ramas/tags protegidos. |
 | Development Delivery | [`.github/workflows/development-delivery.yml`](../.github/workflows/development-delivery.yml) | `push` a `main` con cambios de aplicación, imagen o Helm | `contents: read`, `id-token: write`; environment `development` | Posterior al merge: empaqueta, escanea, genera SBOM, publica/firma en ECR y despliega a EKS de development. La concurrencia evita deploys simultáneos. No es gate de merge. |
 | Production Release | [`.github/workflows/production-release.yml`](../.github/workflows/production-release.yml) | tag protegido `v*` o `workflow_dispatch` con tag `v*` | `contents: read`, `packages: write`, `id-token: write`; environment `production` | Requiere la protección/aprobación configurada en `production`; publica, firma y atestigua la imagen de release. No es gate de merge. |
 | Dependabot Updates | [`.github/dependabot.yml`](../.github/dependabot.yml) | programación gestionada por Dependabot | N/A (configuración de Dependabot) | Abre actualizaciones; sus PRs pasan el mismo `Quality Gate` y revisión humana. |
@@ -123,3 +125,14 @@ tag protegido v* o despacho con tag -> aprobación environment production -> Pro
 Las tareas periódicas o de mantenimiento deben declararse en workflows
 separados y con permisos mínimos; no se añaden a los triggers de PR o de
 delivery para no crear ejecuciones duplicadas.
+
+### Permisos de Terraform
+
+Los roles OIDC de `plan` y `apply` reciben `ReadOnlyAccess` para que Terraform
+pueda refrescar de forma consistente los recursos existentes antes de calcular
+un cambio (incluye tags, `Describe`, `Get` y `List` que `ViewOnlyAccess` no
+cubre). El rol de `plan` sigue sin permisos de provisión y sólo puede crear o
+eliminar el objeto de lock S3 del state exacto. El rol de `apply` obtiene sus
+permisos de mutación únicamente de los ARN declarados en
+`terraform_apply_managed_policy_arns`; esa política debe ser una política
+revisada de provisionamiento del entorno, nunca `AdministratorAccess`.
