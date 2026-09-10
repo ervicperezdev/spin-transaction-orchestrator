@@ -44,6 +44,32 @@ Estos riesgos son exclusivos de `dev`, están sujetos a revisión antes de
 promover cambios de arquitectura, y no autorizan rebajar los controles de
 producción.
 
+## Validación de capacidad previa al cambio
+
+La comprobación de clúster del 10 de septiembre de 2026 encontró dos nodos
+`t3.medium` listos, cada uno con `1930m` de CPU y `3376780Ki` de memoria
+asignables. La aplicación solicita `100m`/`256Mi` y limita
+`250m`/`512Mi`; los dos CoreDNS solicitan `100m`/`70Mi` cada uno. Los drivers
+CSI, `aws-node` y `kube-proxy` también reservan recursos por nodo. Esta carga
+solicitada cabe en el nodo único, pero varios add-ons no declaran requests o
+limits: antes de la ventana se deben ejecutar y adjuntar estos comandos al
+cambio para volver a confirmar la situación real:
+
+```bash
+kubectl get nodes -o wide
+kubectl describe nodes
+kubectl get pods -A -o wide
+kubectl top nodes
+kubectl top pods -A --containers
+```
+
+`kubectl top` requiere Metrics Server; si no está disponible, registrar esa
+limitación y usar los requests/limits junto con `kubectl describe nodes`. No
+reducir a un nodo si hay pods pendientes, presión de recursos o una operación
+de add-ons en curso. El grupo permanece ON_DEMAND: no se autoriza Spot para
+componentes críticos hasta contar con manejo probado de interrupciones y
+fallback.
+
 ## Despliegue, smoke y rollback
 
 1. Revisar el plan con el `terraform.tfvars` privado y confirmar que solo cambia
@@ -83,3 +109,11 @@ Service, AWS WAF, Elastic Load Balancing, AWS NAT Gateway/EC2-Other,
 CloudWatch y Route 53. El coste real no se puede afirmar antes de `apply` y de
 que Cost Explorer procese el uso; la aceptación financiera se completa con esa
 evidencia, no con una estimación estática.
+
+La línea base aún requiere una identidad de AWS con permiso
+`ce:GetCostAndUsage`; la sesión local usada para esta validación no dispone de
+credenciales de AWS. Ejecutar la consulta con el rol FinOps aprobado, guardar el
+JSON resultante como evidencia de la ventana y repetirla después de un ciclo de
+facturación completo. No se debe atribuir el coste total a los nodos: separar
+RDS, EKS control plane, EC2 Compute, NAT/EC2-Other, ALB, WAF, CloudWatch y Route
+53 en el resultado.

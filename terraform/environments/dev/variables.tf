@@ -113,20 +113,43 @@ variable "enable_waf" {
 }
 variable "node_instance_types" {
   type        = list(string)
-  description = "Managed node group instance types."
+  description = "Development base-node type. t3.medium is intentionally explicit; production declares its own profile."
   default     = ["t3.medium"]
+
+  validation {
+    condition     = length(var.node_instance_types) == 1 && var.node_instance_types[0] == "t3.medium"
+    error_message = "The approved development base profile uses exactly one t3.medium instance type."
+  }
 }
 variable "node_min_size" {
-  type    = number
-  default = 1
+  type        = number
+  description = "Development baseline: one ON_DEMAND node. This profile is not highly available."
+  default     = 1
+
+  validation {
+    condition     = var.node_min_size == 1
+    error_message = "The approved development profile keeps one base node; change the reviewed profile before increasing its minimum."
+  }
 }
 variable "node_desired_size" {
-  type    = number
-  default = 1
+  type        = number
+  description = "Development baseline: one ON_DEMAND node; autoscaling may grow to node_max_size during a peak."
+  default     = 1
+
+  validation {
+    condition     = var.node_desired_size == 1
+    error_message = "The approved development profile starts with one desired node; use autoscaling up to the reviewed maximum for a peak."
+  }
 }
 variable "node_max_size" {
-  type    = number
-  default = 2
+  type        = number
+  description = "Peak recovery ceiling for development. Spot is not configured for critical system components."
+  default     = 2
+
+  validation {
+    condition     = var.node_max_size == 2
+    error_message = "The approved development profile permits recovery to at most two nodes."
+  }
 }
 variable "cluster_log_types" {
   type        = list(string)
