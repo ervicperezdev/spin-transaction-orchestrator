@@ -10,6 +10,9 @@ metadata:
   {{- with .Values.ingress.annotations }}
     {{- toYaml . | nindent 4 }}
   {{- end }}
+  {{- if .Values.ingress.waf.enabled }}
+    alb.ingress.kubernetes.io/wafv2-acl-arn: {{ required "ingress.waf.aclArn is required when WAF is enabled" .Values.ingress.waf.aclArn | quote }}
+  {{- end }}
 spec:
   {{- with .Values.ingress.className }}
   ingressClassName: {{ . | quote }}

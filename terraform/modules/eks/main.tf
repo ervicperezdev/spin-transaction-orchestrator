@@ -15,6 +15,36 @@ variable "cluster_admin_principal_arn" {
   description = "IAM principal allowed to administer the cluster and install platform addons."
 }
 variable "allowed_control_plane_cidrs" { type = list(string) }
+variable "node_instance_types" {
+  type        = list(string)
+  description = "EC2 instance types permitted in the managed node group."
+  default     = ["t3.medium"]
+}
+variable "node_min_size" {
+  type        = number
+  description = "Minimum managed node group size."
+  default     = 2
+}
+variable "node_desired_size" {
+  type        = number
+  description = "Desired managed node group size."
+  default     = 2
+}
+variable "node_max_size" {
+  type        = number
+  description = "Maximum managed node group size."
+  default     = 4
+}
+variable "cluster_log_types" {
+  type        = list(string)
+  description = "EKS control-plane logs retained for this environment."
+  default     = ["api", "audit", "authenticator", "controllerManager", "scheduler"]
+
+  validation {
+    condition     = contains(var.cluster_log_types, "api") && contains(var.cluster_log_types, "audit")
+    error_message = "cluster_log_types must retain at least the api and audit EKS control-plane logs."
+  }
+}
 
 data "aws_caller_identity" "current" {}
 
@@ -144,6 +174,8 @@ resource "aws_iam_role_policy_attachment" "node_ecr" {
 # nosemgrep: terraform.lang.security.eks-public-endpoint-enabled.eks-public-endpoint-enabled
 resource "aws_eks_cluster" "this" {
   # checkov:skip=CKV_AWS_39: EXC-001 authorizes a temporary, CIDR-restricted public endpoint for GitHub-hosted development runners; private endpoint stays enabled.
+  # checkov:skip=CKV_AWS_37: Dev intentionally retains only api and audit under TRA-46; the module default preserves all EKS control-plane logs for other environments.
+  # nosemgrep: terraform.lang.security.eks-insufficient-control-plane-logging.eks-insufficient-control-plane-logging
   name     = var.cluster_name
   role_arn = aws_iam_role.cluster.arn
   version  = "1.31"
@@ -161,7 +193,10 @@ resource "aws_eks_cluster" "this" {
     public_access_cidrs     = var.allowed_control_plane_cidrs
   }
 
-  enabled_cluster_log_types = ["api", "audit", "authenticator", "controllerManager", "scheduler"]
+  # api and audit are enforced by cluster_log_types validation above. Semgrep
+  # cannot infer variable validation through the module boundary.
+  # nosemgrep: terraform.lang.security.eks-insufficient-control-plane-logging.eks-insufficient-control-plane-logging
+  enabled_cluster_log_types = var.cluster_log_types
 
   encryption_config {
     resources = ["secrets"]
@@ -262,15 +297,16 @@ resource "aws_eks_node_group" "default" {
   node_role_arn   = aws_iam_role.node.arn
   subnet_ids      = var.subnet_ids
   capacity_type   = "ON_DEMAND"
+  instance_types  = var.node_instance_types
   launch_template {
     id      = aws_launch_template.node.id
     version = aws_launch_template.node.latest_version
   }
 
   scaling_config {
-    desired_size = 2
-    min_size     = 2
-    max_size     = 4
+    desired_size = var.node_desired_size
+    min_size     = var.node_min_size
+    max_size     = var.node_max_size
   }
   update_config { max_unavailable = 1 }
   depends_on = [aws_iam_role_policy_attachment.node_worker, aws_iam_role_policy_attachment.node_cni, aws_iam_role_policy_attachment.node_ecr]

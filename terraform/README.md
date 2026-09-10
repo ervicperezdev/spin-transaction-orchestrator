@@ -157,8 +157,11 @@ edite ni borre state/lock a ciegas.
   [EXC-001](../docs/security/EXC-001-eks-public-endpoint.md). Los CIDRs reales y
   la evidencia operativa deben revisarse. La validación heredada rechaza
   `0.0.0.0/1`, pero permite `0.0.0.0/0`; no garantiza una exposición restringida.
-- RDS tiene cifrado, respaldos, protección contra eliminación y acceso
-  PostgreSQL únicamente desde el security group de los nodos.
+- RDS tiene cifrado y acceso PostgreSQL únicamente desde el security group de
+  los nodos. El perfil mínimo de `dev` reduce explícitamente HA, retención y
+  protección contra eliminación; consulte
+  [`docs/finops-dev-profile.md`](../docs/finops-dev-profile.md) para los riesgos,
+  rollback y verificación de Cost Explorer.
 - ECR conserva tags inmutables, escaneo y retención de imágenes sin tag.
 - GitHub usa OIDC para asumir un rol restringido al repositorio/ref configurado,
   acceder al repositorio ECR y consultar el clúster. Las entradas de acceso EKS

@@ -103,3 +103,55 @@ variable "allowed_control_plane_cidrs" {
     error_message = "Provide approved, non-public control-plane CIDRs."
   }
 }
+
+# Perfil FinOps explícito para dev. Los valores por defecto de los módulos
+# permanecen orientados a producción; este entorno opta por capacidad mínima.
+variable "enable_waf" {
+  type        = bool
+  description = "Create the regional WAF ACL. Disabled by default only for dev."
+  default     = false
+}
+variable "node_instance_types" {
+  type        = list(string)
+  description = "Managed node group instance types."
+  default     = ["t3.medium"]
+}
+variable "node_min_size" {
+  type    = number
+  default = 1
+}
+variable "node_desired_size" {
+  type    = number
+  default = 1
+}
+variable "node_max_size" {
+  type    = number
+  default = 2
+}
+variable "cluster_log_types" {
+  type        = list(string)
+  description = "Minimal EKS control-plane security evidence retained in dev."
+  default     = ["api", "audit"]
+}
+variable "rds_instance_class" {
+  type        = string
+  description = "Development RDS size; production must choose its own profile."
+  default     = "db.t4g.micro"
+}
+variable "rds_backup_retention_period" {
+  type    = number
+  default = 1
+}
+variable "rds_deletion_protection" {
+  type    = bool
+  default = false
+}
+variable "rds_multi_az" {
+  type    = bool
+  default = false
+}
+variable "rds_enabled_cloudwatch_logs_exports" {
+  type        = list(string)
+  description = "CloudWatch PostgreSQL log exports; disabled in dev to reduce ingestion."
+  default     = []
+}

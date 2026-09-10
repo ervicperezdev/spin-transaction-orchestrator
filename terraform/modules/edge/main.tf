@@ -3,6 +3,11 @@ variable "zone_name" { type = string }
 variable "hostname" { type = string }
 variable "vpc_id" { type = string }
 variable "node_security_group_id" { type = string }
+variable "enable_waf" {
+  type        = bool
+  description = "Whether to create the regional WAF ACL for this environment."
+  default     = true
+}
 
 resource "aws_security_group" "alb" {
   # checkov:skip=CKV_AWS_260: Internet-facing ALB must accept HTTP solely to issue an HTTPS redirect; no workload port is exposed.
@@ -76,6 +81,7 @@ resource "aws_acm_certificate_validation" "this" {
 
 resource "aws_wafv2_web_acl" "this" {
   # checkov:skip=CKV2_AWS_31: WAF logs are centralized by the account logging service; this module does not own the destination/resource policy.
+  count = var.enable_waf ? 1 : 0
   name  = "${var.name}-web"
   scope = "REGIONAL"
   default_action {
@@ -143,6 +149,6 @@ resource "aws_wafv2_web_acl" "this" {
 }
 
 output "certificate_arn" { value = aws_acm_certificate_validation.this.certificate_arn }
-output "web_acl_arn" { value = aws_wafv2_web_acl.this.arn }
+output "web_acl_arn" { value = try(aws_wafv2_web_acl.this[0].arn, null) }
 output "zone_id" { value = data.aws_route53_zone.this.zone_id }
 output "alb_security_group_id" { value = aws_security_group.alb.id }

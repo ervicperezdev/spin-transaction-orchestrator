@@ -3,6 +3,31 @@ variable "database_name" { type = string }
 variable "subnet_ids" { type = list(string) }
 variable "vpc_id" { type = string }
 variable "allowed_security_group_id" { type = string }
+variable "instance_class" {
+  type        = string
+  description = "RDS instance class for this environment."
+  default     = "db.t4g.medium"
+}
+variable "backup_retention_period" {
+  type        = number
+  description = "Number of days to retain automated backups."
+  default     = 7
+}
+variable "deletion_protection" {
+  type        = bool
+  description = "Protect the database from accidental deletion."
+  default     = true
+}
+variable "multi_az" {
+  type        = bool
+  description = "Create a standby instance in another Availability Zone."
+  default     = true
+}
+variable "enabled_cloudwatch_logs_exports" {
+  type        = list(string)
+  description = "PostgreSQL log types exported to CloudWatch."
+  default     = ["postgresql", "upgrade"]
+}
 
 data "aws_caller_identity" "current" {}
 
@@ -97,20 +122,24 @@ resource "aws_security_group" "database" {
   egress = []
 }
 
+# Dev deliberately sets enabled_cloudwatch_logs_exports to [] under TRA-46 to
+# reduce log-ingestion cost. Production retains the module default; the dev
+# risk, rollback and Cost Explorer review are documented in finops-dev-profile.
+# nosemgrep: terraform.aws.security.aws-db-instance-no-logging.aws-db-instance-no-logging
 resource "aws_db_instance" "this" {
   # checkov:skip=CKV2_AWS_69: PostgreSQL TLS is enforced through the attached postgres16 parameter group (rds.force_ssl=1); this graph check does not follow parameter-group settings.
   identifier                          = var.identifier
   engine                              = "postgres"
   engine_version                      = "16"
-  instance_class                      = "db.t4g.medium"
+  instance_class                      = var.instance_class
   allocated_storage                   = 20
   max_allocated_storage               = 100
   storage_encrypted                   = true
   iam_database_authentication_enabled = true
-  backup_retention_period             = 7
-  deletion_protection                 = true
+  backup_retention_period             = var.backup_retention_period
+  deletion_protection                 = var.deletion_protection
   publicly_accessible                 = false
-  multi_az                            = true
+  multi_az                            = var.multi_az
   db_name                             = var.database_name
   username                            = "REPLACE_AT_DEPLOYMENT"
   manage_master_user_password         = true
@@ -118,7 +147,7 @@ resource "aws_db_instance" "this" {
   vpc_security_group_ids              = [aws_security_group.database.id]
   skip_final_snapshot                 = false
   final_snapshot_identifier           = "${var.identifier}-final"
-  enabled_cloudwatch_logs_exports     = ["postgresql", "upgrade"]
+  enabled_cloudwatch_logs_exports     = var.enabled_cloudwatch_logs_exports
   copy_tags_to_snapshot               = true
   auto_minor_version_upgrade          = true
   performance_insights_enabled        = true
@@ -126,8 +155,7 @@ resource "aws_db_instance" "this" {
   monitoring_interval                 = 60
   monitoring_role_arn                 = aws_iam_role.enhanced_monitoring.arn
   parameter_group_name                = aws_db_parameter_group.postgres.name
-
-  depends_on = [aws_iam_role_policy_attachment.enhanced_monitoring]
+  depends_on                          = [aws_iam_role_policy_attachment.enhanced_monitoring]
 }
 
 output "endpoint" { value = aws_db_instance.this.address }

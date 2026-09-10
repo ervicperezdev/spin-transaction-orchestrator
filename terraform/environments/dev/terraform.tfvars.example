@@ -7,6 +7,18 @@ database_subnet_cidrs       = ["10.42.32.0/24", "10.42.33.0/24"]
 route53_zone_name           = "example.com"
 application_hostname        = "transaction-api.example.com"
 allowed_control_plane_cidrs = ["10.0.0.0/8"] # Replace with approved admin-network ranges.
+# Minimum-cost dev profile. Keep production values in its separate environment.
+enable_waf                          = false
+node_instance_types                  = ["t3.medium"]
+node_min_size                        = 1
+node_desired_size                    = 1
+node_max_size                        = 2
+cluster_log_types                    = ["api", "audit"]
+rds_instance_class                   = "db.t4g.micro"
+rds_backup_retention_period          = 1
+rds_deletion_protection              = false
+rds_multi_az                         = false
+rds_enabled_cloudwatch_logs_exports  = []
 # Do not put secret values here. Exact Secrets Manager ARNs may be supplied after review.
 workload_secret_arns = []
 # Terraform does not create secret values. Supply the exact ARN after its value

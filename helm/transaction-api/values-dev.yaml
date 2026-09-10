@@ -47,10 +47,12 @@ ingress:
   path: /
   pathType: Prefix
   annotations:
-    # Salidas acm_certificate_arn, waf_web_acl_arn y alb_security_group_id.
+    # Salidas acm_certificate_arn y alb_security_group_id. WAF está desactivado en dev.
     alb.ingress.kubernetes.io/certificate-arn: "arn:aws:acm:us-east-1:911167887101:certificate/27d8dcfd-8292-4f4d-be17-69f19588d9cf"
-    alb.ingress.kubernetes.io/wafv2-acl-arn: "arn:aws:wafv2:us-east-1:911167887101:regional/webacl/spin-dev-web/f416396d-c2ec-4233-a344-ac0a72b80cbf"
     alb.ingress.kubernetes.io/security-groups: "sg-0b55406a1036d29ee"
+  waf:
+    enabled: false
+    aclArn: ""
 
 networkPolicy:
   enabled: true
