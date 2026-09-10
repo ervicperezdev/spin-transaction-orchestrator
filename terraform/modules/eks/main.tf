@@ -38,7 +38,7 @@ variable "node_max_size" {
 variable "cluster_log_types" {
   type        = list(string)
   description = "EKS control-plane logs retained for this environment."
-  default     = ["api", "audit", "authenticator"]
+  default     = ["api", "audit", "authenticator", "controllerManager", "scheduler"]
 
   validation {
     condition     = contains(var.cluster_log_types, "api") && contains(var.cluster_log_types, "audit")
@@ -174,6 +174,7 @@ resource "aws_iam_role_policy_attachment" "node_ecr" {
 # nosemgrep: terraform.lang.security.eks-public-endpoint-enabled.eks-public-endpoint-enabled
 resource "aws_eks_cluster" "this" {
   # checkov:skip=CKV_AWS_39: EXC-001 authorizes a temporary, CIDR-restricted public endpoint for GitHub-hosted development runners; private endpoint stays enabled.
+  # checkov:skip=CKV_AWS_37: Dev intentionally retains only api and audit under TRA-46; the module default preserves all EKS control-plane logs for other environments.
   name     = var.cluster_name
   role_arn = aws_iam_role.cluster.arn
   version  = "1.31"
