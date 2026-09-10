@@ -19,6 +19,7 @@ reemplace sus placeholders. El archivo real `backend.hcl` se ignora en Git.
 Se usa bloqueo nativo S3 (`use_lockfile = true`), sin DynamoDB.
 
 ```bash
+
 cd terraform/environments/dev
 terraform init -backend-config=/ruta/privada/backend.hcl
 terraform fmt -check -recursive ../..
