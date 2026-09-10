@@ -5,9 +5,12 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.boot.test.system.CapturedOutput;
+import org.springframework.boot.test.system.OutputCaptureExtension;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
 import org.springframework.test.web.servlet.MockMvc;
@@ -18,6 +21,7 @@ import org.testcontainers.junit.jupiter.Testcontainers;
 @SpringBootTest
 @AutoConfigureMockMvc
 @Testcontainers
+@ExtendWith(OutputCaptureExtension.class)
 class OperationalEndpointsIntegrationTest {
     @Container
     static final PostgreSQLContainer<?> POSTGRES = new PostgreSQLContainer<>("postgres:16-alpine")
@@ -59,6 +63,17 @@ class OperationalEndpointsIntegrationTest {
                 .andExpect(status().isOk())
                 .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers.header()
                         .exists("X-Correlation-ID"));
+    }
+
+    @Test
+    void emitsSafeAccessLogForHealthRequests(CapturedOutput output) throws Exception {
+        mockMvc.perform(get("/actuator/health?token=must-not-be-logged"))
+                .andExpect(status().isOk());
+
+        org.assertj.core.api.Assertions.assertThat(output)
+                .contains("http_request_completed")
+                .contains("/actuator/health")
+                .doesNotContain("must-not-be-logged");
     }
 
     @Test
