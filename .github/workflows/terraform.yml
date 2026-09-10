@@ -43,6 +43,13 @@ jobs:
             echo "::error::Missing protected Terraform configuration: ${missing[*]}. Configure the named GitHub variable/secret before rerunning."
             exit 1
           fi
+      - name: Record non-sensitive OIDC claims
+        uses: actions/github-script@d746ffe35508b1917358783b479e04febd2b8f71 # v9.0.0
+        with:
+          script: |
+            const token = await core.getIDToken('sts.amazonaws.com');
+            const claims = JSON.parse(Buffer.from(token.split('.')[1], 'base64url').toString());
+            core.notice(`OIDC issuer=${claims.iss}; audience=${claims.aud}; subject=${claims.sub}; repository=${claims.repository}; event=${claims.event_name}; ref=${claims.ref}`);
       - name: Configure AWS credentials with OIDC plan role
         uses: aws-actions/configure-aws-credentials@cbe3b392738ccf3f987d68400dafcf4b0624a56c # v6.2.4
         with:
