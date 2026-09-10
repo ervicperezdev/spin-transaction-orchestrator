@@ -106,6 +106,14 @@ El segundo puede leer y escribir exclusivamente
 configurado. Así el `apply` puede persistir state sin conceder acceso a otros
 states del bucket.
 
+Además, el módulo entrega al rol apply las mutaciones mínimas para reconciliar
+security groups de EC2 y parameter groups de RDS (`Authorize/Revoke` de reglas
+de security group y `Modify/ResetDBParameterGroup`), limitadas a la cuenta y
+región activas. Para crear o gestionar otros recursos se mantiene la política
+account-managed declarada en `terraform_apply_managed_policy_arns`; revísela y
+amplíela explícitamente ante cada nuevo `AccessDenied`, en vez de adjuntar
+`AdministratorAccess`.
+
 Por el bootstrap, este cambio se debe aplicar una vez con una identidad humana
 o de plataforma ya autorizada contra el backend existente. Después publique
 los outputs como secretos `AWS_TERRAFORM_PLAN_ROLE_ARN` (repositorio) y
