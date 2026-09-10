@@ -137,6 +137,13 @@ jobs:
           path: sbom.spdx.json
           retention-days: 90
 
+      # Validates the exact local Buildx image before it is published. This is
+      # deliberately independent from AWS, DNS, ACM, WAF, ALB and EKS.
+      - name: Artifact smoke (image + PostgreSQL)
+        env:
+          ARTIFACT_IMAGE: ${{ steps.ecr-login.outputs.registry }}/${{ env.IMAGE_NAME }}:${{ github.sha }}
+        run: .github/scripts/artifact-smoke.sh
+
       # ── Push validated artifact ───────────────────────────────────────────
       #
       # Only an image that passed Trivy reaches ECR.
@@ -242,26 +249,25 @@ jobs:
       # Deploy the exact commit SHA that passed the security gate.
       #
       - name: Helm upgrade / install
+        env:
+          DEPLOY_HOSTNAME: ${{ vars.APP_HOSTNAME }}
         run: |
+          : "${DEPLOY_HOSTNAME:?Set APP_HOSTNAME from Terraform application_hostname output.}"
           helm upgrade --install transaction-api \
             helm/transaction-api/ \
             --values helm/transaction-api/values-dev.yaml \
             --set image.repository="${{ needs.build-and-push.outputs.ecr-image }}" \
             --set image.tag="${{ needs.build-and-push.outputs.image-tag }}" \
+            --set-string ingress.hostname="${DEPLOY_HOSTNAME}" \
             --namespace transaction-api \
             --wait \
             --timeout 5m
 
-      # ── Smoke test ────────────────────────────────────────────────────────
-      #
-      # Unlike the previous implementation, failure here FAILS the pipeline.
-      #
-      - name: Smoke test
-        run: |
-          curl \
-            --fail \
-            --silent \
-            --show-error \
-            --retry 5 \
-            --retry-delay 10 \
-            "https://${{ vars.APP_HOSTNAME }}/actuator/health"
+      # Public development only. Private environments must run this script from
+      # a private runner or a minimally privileged in-cluster Job.
+      - name: Post-deploy smoke (public development)
+        env:
+          DEPLOY_HOSTNAME: ${{ vars.APP_HOSTNAME }}
+          KUBERNETES_NAMESPACE: transaction-api
+          HELM_RELEASE: transaction-api
+        run: .github/scripts/post-deploy-smoke.sh

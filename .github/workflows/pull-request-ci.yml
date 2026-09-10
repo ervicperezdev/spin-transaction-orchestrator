@@ -145,7 +145,7 @@ jobs:
         if: hashFiles('helm/transaction-api/Chart.yaml') != ''
         run: |
           # Helm is pre-installed on ubuntu-latest GitHub-hosted runners.
-          helm lint helm/transaction-api/
+          helm lint helm/transaction-api/ --set-string ingress.hostname=lint.example.invalid
 
   # ── 8. CONTAINER SECURITY (parallel) ─────────────────────────────────────
   # Build and scan one local image without registry credentials. This replaces

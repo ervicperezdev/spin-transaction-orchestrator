@@ -132,6 +132,11 @@ curl --fail http://localhost:8080/actuator/health
 
 Detén el contenedor con `docker stop spin-transaction-orchestrator`; usa `docker compose down` para detener la base de datos local.
 
+En CI, el workflow usa `.github/compose.artifact-smoke.yml` sobre la misma imagen
+local que acaba de construir: espera PostgreSQL, verifica `/actuator/health` y
+hace un `GET /transactions?page=0&size=1` de solo lectura. Si falla, publica los
+logs de Compose y siempre elimina contenedores y volúmenes.
+
 ## Controles de seguridad del contenedor
 
 El job `Container Image Security` del workflow `Pull Request CI` se ejecuta para cada Pull Request hacia `main`. Usa versiones fijas de imágenes de herramientas e incluye dos gates independientes:
