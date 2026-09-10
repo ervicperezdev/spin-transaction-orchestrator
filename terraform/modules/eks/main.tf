@@ -12,7 +12,26 @@ variable "cluster_admin_principal_arn" {
 }
 variable "allowed_control_plane_cidrs" { type = list(string) }
 
+data "aws_caller_identity" "current" {}
+
+data "aws_iam_policy_document" "secrets_kms" {
+  # checkov:skip=CKV_AWS_109: A customer-managed KMS key requires an account-root administration statement; encryption consumers receive only service grants.
+  # checkov:skip=CKV_AWS_111: A customer-managed KMS key requires an account-root administration statement; encryption consumers receive only service grants.
+  # checkov:skip=CKV_AWS_356: KMS key policies use Resource="*" by AWS design because the policy is attached to the key itself.
+  statement {
+    sid       = "AllowAccountAdministration"
+    effect    = "Allow"
+    actions   = ["kms:*"]
+    resources = ["*"]
+    principals {
+      type        = "AWS"
+      identifiers = ["arn:aws:iam::${data.aws_caller_identity.current.account_id}:root"]
+    }
+  }
+}
+
 resource "aws_security_group" "node" {
+  # checkov:skip=CKV_AWS_382: Nodes require controlled outbound HTTPS/DNS through NAT for EKS, image pulls and AWS APIs until VPC endpoints and NetworkPolicies are fully enforced.
   name        = "${var.cluster_name}-node"
   description = "EKS worker nodes; no public ingress"
   vpc_id      = var.vpc_id
@@ -33,6 +52,7 @@ resource "aws_security_group" "node" {
 }
 
 resource "aws_security_group" "cluster" {
+  # checkov:skip=CKV_AWS_382: EKS control-plane managed traffic requires unrestricted return/outbound connectivity; ingress is limited to the node security group.
   name        = "${var.cluster_name}-cluster"
   description = "EKS API endpoint; accepts traffic only from worker nodes"
   vpc_id      = var.vpc_id
@@ -44,6 +64,7 @@ resource "aws_security_group" "cluster" {
     security_groups = [aws_security_group.node.id]
   }
   egress {
+    description = "EKS control-plane managed outbound and return traffic"
     from_port   = 0
     to_port     = 0
     protocol    = "-1"
@@ -73,6 +94,7 @@ resource "aws_security_group_rule" "node_from_cluster_alb_webhook" {
 }
 
 resource "aws_launch_template" "node" {
+  # checkov:skip=CKV_AWS_341: Hop limit 2 is required for supported EKS pod networking paths that access IMDS; IMDSv2 remains mandatory and instance metadata tags are disabled.
   name_prefix            = "${var.cluster_name}-node-"
   vpc_security_group_ids = [aws_security_group.node.id]
   metadata_options {
@@ -117,6 +139,7 @@ resource "aws_iam_role_policy_attachment" "node_ecr" {
 # Expires: 2026-09-23. See docs/security/EXC-001-eks-public-endpoint.md.
 # nosemgrep: terraform.lang.security.eks-public-endpoint-enabled.eks-public-endpoint-enabled
 resource "aws_eks_cluster" "this" {
+  # checkov:skip=CKV_AWS_39: EXC-001 authorizes a temporary, CIDR-restricted public endpoint for GitHub-hosted development runners; private endpoint stays enabled.
   name     = var.cluster_name
   role_arn = aws_iam_role.cluster.arn
   version  = "1.31"
@@ -134,8 +157,25 @@ resource "aws_eks_cluster" "this" {
     public_access_cidrs     = var.allowed_control_plane_cidrs
   }
 
-  enabled_cluster_log_types = ["api", "audit", "authenticator"]
-  depends_on                = [aws_iam_role_policy_attachment.cluster]
+  enabled_cluster_log_types = ["api", "audit", "authenticator", "controllerManager", "scheduler"]
+
+  encryption_config {
+    resources = ["secrets"]
+    provider { key_arn = aws_kms_key.secrets.arn }
+  }
+  depends_on = [aws_iam_role_policy_attachment.cluster]
+}
+
+resource "aws_kms_key" "secrets" {
+  description             = "Envelope encryption for Kubernetes Secrets in ${var.cluster_name}"
+  enable_key_rotation     = true
+  deletion_window_in_days = 30
+  policy                  = data.aws_iam_policy_document.secrets_kms.json
+}
+
+resource "aws_kms_alias" "secrets" {
+  name          = "alias/${var.cluster_name}-eks-secrets"
+  target_key_id = aws_kms_key.secrets.key_id
 }
 
 resource "aws_eks_access_entry" "cluster_admin" {

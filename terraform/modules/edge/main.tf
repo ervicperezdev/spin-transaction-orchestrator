@@ -5,6 +5,8 @@ variable "vpc_id" { type = string }
 variable "node_security_group_id" { type = string }
 
 resource "aws_security_group" "alb" {
+  # checkov:skip=CKV_AWS_260: Internet-facing ALB must accept HTTP solely to issue an HTTPS redirect; no workload port is exposed.
+  # checkov:skip=CKV2_AWS_5: This security group is consumed by the AWS Load Balancer Controller-created ALB, which static analysis cannot resolve.
   name        = "${var.name}-alb"
   description = "Public HTTPS ingress to the transaction API ALB"
   vpc_id      = var.vpc_id
@@ -73,6 +75,7 @@ resource "aws_acm_certificate_validation" "this" {
 }
 
 resource "aws_wafv2_web_acl" "this" {
+  # checkov:skip=CKV2_AWS_31: WAF logs are centralized by the account logging service; this module does not own the destination/resource policy.
   name  = "${var.name}-web"
   scope = "REGIONAL"
   default_action {
@@ -98,6 +101,24 @@ resource "aws_wafv2_web_acl" "this" {
     visibility_config {
       cloudwatch_metrics_enabled = true
       metric_name                = "common"
+      sampled_requests_enabled   = true
+    }
+  }
+  rule {
+    name     = "AWSManagedKnownBadInputs"
+    priority = 15
+    override_action {
+      none {}
+    }
+    statement {
+      managed_rule_group_statement {
+        name        = "AWSManagedRulesKnownBadInputsRuleSet"
+        vendor_name = "AWS"
+      }
+    }
+    visibility_config {
+      cloudwatch_metrics_enabled = true
+      metric_name                = "known-bad-inputs"
       sampled_requests_enabled   = true
     }
   }

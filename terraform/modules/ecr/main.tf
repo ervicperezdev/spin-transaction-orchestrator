@@ -5,7 +5,8 @@ resource "aws_ecr_repository" "this" {
   image_tag_mutability = "IMMUTABLE"
 
   image_scanning_configuration { scan_on_push = true }
-  encryption_configuration { encryption_type = "AES256" }
+  # AWS-managed KMS key for ECR; no customer key material is exposed to CI.
+  encryption_configuration { encryption_type = "KMS" }
 }
 
 resource "aws_ecr_lifecycle_policy" "this" {
