@@ -6,6 +6,12 @@ metadata:
 data:
   execute-approved.json: |
     {"request":{"method":"POST","urlPath":"/provider/v1/execute"},"response":{"status":200,"headers":{"Content-Type":"application/json"},"jsonBody":{"status":"APPROVED","transactionId":"mock-transaction","balance":974.50,"executedAt":"2026-01-01T00:00:00Z"}}}
+  execute-rejected.json: |
+    {"priority":1,"request":{"method":"POST","urlPath":"/provider/v1/execute","bodyPatterns":[{"matchesJsonPath":"$[?(@.accountId == 'acct-provider-rejected')]"}]},"response":{"status":200,"headers":{"Content-Type":"application/json"},"jsonBody":{"status":"REJECTED","transactionId":"mock-rejected-transaction","rejectionCode":"INSUFFICIENT_FUNDS","rejectionReason":"Insufficient funds"}}}
+  execute-provider-error.json: |
+    {"priority":1,"request":{"method":"POST","urlPath":"/provider/v1/execute","bodyPatterns":[{"matchesJsonPath":"$[?(@.accountId == 'acct-provider-error')]"}]},"response":{"status":503}}
+  execute-timeout.json: |
+    {"priority":1,"request":{"method":"POST","urlPath":"/provider/v1/execute","bodyPatterns":[{"matchesJsonPath":"$[?(@.accountId == 'acct-provider-timeout')]"}]},"response":{"status":200,"fixedDelayMilliseconds":4000,"headers":{"Content-Type":"application/json"},"jsonBody":{"status":"APPROVED","transactionId":"late","balance":1.00}}}
 ---
 apiVersion: v1
 kind: Service

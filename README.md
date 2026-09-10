@@ -82,6 +82,16 @@ curl -X POST http://localhost:8080/transactions -H 'Content-Type: application/js
 
 La respuesta incluye `id`, `accountId`, `description`, `status`, `providerTransactionId`, `balanceAfter` y `createdAt`. El Deployment de WireMock solo se crea con `values-dev.yaml` como `ClusterIP`; no existe plantilla Ingress para el mock.
 
+## Batería HTTP del challenge
+
+Con el deployment actualizado, ejecuta todos los casos por HTTP (aprobación, rechazo, error/timeout del provider, validación HTTP y reglas de dominio):
+
+```bash
+BASE_URL=https://spin.ervic.pro ./scripts/challenge-api-tests.sh
+```
+
+Los escenarios especiales del mock se seleccionan con `accountId`: `acct-provider-rejected`, `acct-provider-error` y `acct-provider-timeout`. Ninguno expone el mock; las peticiones siguen entrando únicamente por la API pública.
+
 Copia `.env.example` únicamente por comodidad local; `.env` se ignora y nunca debe contener credenciales de producción.
 
 ## Convenciones de paquetes

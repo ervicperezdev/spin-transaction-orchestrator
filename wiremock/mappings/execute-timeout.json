@@ -1,0 +1,5 @@
+{
+  "priority": 1,
+  "request": { "method": "POST", "urlPath": "/provider/v1/execute", "bodyPatterns": [{ "matchesJsonPath": "$[?(@.accountId == 'acct-provider-timeout')]" }] },
+  "response": { "status": 200, "fixedDelayMilliseconds": 4000, "headers": { "Content-Type": "application/json" }, "jsonBody": { "status": "APPROVED", "transactionId": "late", "balance": 1.00 } }
+}

@@ -1,0 +1,5 @@
+{
+  "priority": 1,
+  "request": { "method": "POST", "urlPath": "/provider/v1/execute", "bodyPatterns": [{ "matchesJsonPath": "$[?(@.accountId == 'acct-provider-rejected')]" }] },
+  "response": { "status": 200, "headers": { "Content-Type": "application/json" }, "jsonBody": { "status": "REJECTED", "transactionId": "mock-rejected-transaction", "rejectionCode": "INSUFFICIENT_FUNDS", "rejectionReason": "Insufficient funds" } }
+}
