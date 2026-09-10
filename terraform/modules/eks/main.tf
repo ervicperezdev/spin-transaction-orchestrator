@@ -316,6 +316,9 @@ resource "aws_eks_node_group" "default" {
     min_size     = var.node_min_size
     max_size     = var.node_max_size
   }
+  # force_update_version lets EKS terminate nodes even when a PDB blocks pod
+  # eviction; prevents PodEvictionFailure from stalling launch-template rollouts.
+  force_update_version = true
   update_config { max_unavailable = 1 }
   depends_on = [aws_iam_role_policy_attachment.node_worker, aws_iam_role_policy_attachment.node_cni, aws_iam_role_policy_attachment.node_ecr]
 }
