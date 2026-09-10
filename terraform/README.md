@@ -93,6 +93,13 @@ outputs: `github_terraform_plan_role_arn` y
 `github_terraform_apply_role_arn`. El primero puede leer el state exacto y
 leer/crear/eliminar sólo su archivo `.tflock`; nunca puede sobrescribir el
 state.
+
+El flujo de development genera el plan read-only en `main` y después espera la
+aprobación del Environment `development` antes de aplicar ese mismo artifact.
+Por ello el trust policy del rol de plan debe admitir tanto `:pull_request`
+como `:ref:refs/heads/main` con el prefijo OIDC personalizado del repositorio.
+Al adoptar este flujo en un rol ya existente, actualice esa trust policy una
+vez con una identidad administradora antes del primer push a `main`.
 El segundo puede leer y escribir exclusivamente
 `spin-transaction-orchestrator/dev/terraform.tfstate` y su lock en el bucket
 configurado. Así el `apply` puede persistir state sin conceder acceso a otros
