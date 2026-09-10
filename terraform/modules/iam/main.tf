@@ -16,6 +16,10 @@ variable "eks_oidc_issuer_hostpath" { type = string }
 variable "kubernetes_namespace" { type = string }
 variable "kubernetes_service_account" { type = string }
 
+data "aws_caller_identity" "current" {}
+data "aws_partition" "current" {}
+data "aws_region" "current" {}
+
 locals {
   github_oidc_url      = "https://token.actions.githubusercontent.com"
   github_subject       = "repo:${var.github_repository}:ref:${var.github_ref}"
@@ -234,6 +238,42 @@ resource "aws_iam_role_policy" "terraform_apply_state" {
 resource "aws_iam_role_policy_attachment" "terraform_apply_read_only" {
   role       = aws_iam_role.github_terraform_apply.name
   policy_arn = "arn:aws:iam::aws:policy/ReadOnlyAccess"
+}
+
+# These are the write operations required to reconcile the Terraform-managed
+# EKS security groups and the PostgreSQL parameter group. They are scoped to
+# this account and region; broader provisioning capabilities remain opt-in via
+# terraform_apply_managed_policy_arns below.
+data "aws_iam_policy_document" "terraform_apply_core_mutations" {
+  statement {
+    sid = "ManageTerraformSecurityGroups"
+    actions = [
+      "ec2:AuthorizeSecurityGroupEgress",
+      "ec2:AuthorizeSecurityGroupIngress",
+      "ec2:CreateTags",
+      "ec2:DeleteTags",
+      "ec2:RevokeSecurityGroupEgress",
+      "ec2:RevokeSecurityGroupIngress",
+      "ec2:UpdateSecurityGroupRuleDescriptionsEgress",
+      "ec2:UpdateSecurityGroupRuleDescriptionsIngress",
+    ]
+    resources = ["arn:${data.aws_partition.current.partition}:ec2:${data.aws_region.current.name}:${data.aws_caller_identity.current.account_id}:security-group/*"]
+  }
+
+  statement {
+    sid = "ManageTerraformRdsParameterGroups"
+    actions = [
+      "rds:ModifyDBParameterGroup",
+      "rds:ResetDBParameterGroup",
+    ]
+    resources = ["arn:${data.aws_partition.current.partition}:rds:${data.aws_region.current.name}:${data.aws_caller_identity.current.account_id}:pg:*"]
+  }
+}
+
+resource "aws_iam_role_policy" "terraform_apply_core_mutations" {
+  name   = "manage-security-groups-and-rds-parameters"
+  role   = aws_iam_role.github_terraform_apply.id
+  policy = data.aws_iam_policy_document.terraform_apply_core_mutations.json
 }
 
 # Infrastructure write permissions are supplied as approved, account-managed
