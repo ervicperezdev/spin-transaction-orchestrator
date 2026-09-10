@@ -7,14 +7,14 @@ import org.springframework.stereotype.Component;
 @Component
 class TransactionEntityMapper {
     TransactionEntity toEntity(Transaction transaction) {
-        return new TransactionEntity(transaction.id(), transaction.type(), transaction.status(), transaction.amount(),
-                transaction.currency().getCurrencyCode(), transaction.providerReference(), transaction.rejectionReason(),
+        return new TransactionEntity(transaction.id(), transaction.accountId(), transaction.description(), transaction.type(), transaction.status(), transaction.amount(),
+                transaction.currency().getCurrencyCode(), transaction.providerTransactionId(), transaction.balanceAfter(), transaction.rejectionCode(), transaction.rejectionReason(),
                 transaction.createdAt(), transaction.idempotencyKey());
     }
 
     Transaction toDomain(TransactionEntity entity) {
-        return Transaction.rehydrate(entity.id(), entity.type(), entity.amount(), Currency.getInstance(entity.currency()),
-                entity.createdAt(), entity.status(), entity.providerReference(), entity.rejectionReason(),
+        return Transaction.rehydrate(entity.id(), entity.accountId(), entity.description(), entity.type(), entity.amount(), Currency.getInstance(entity.currency()),
+                entity.createdAt(), entity.status(), entity.providerTransactionId(), entity.balanceAfter(), entity.rejectionCode(), entity.rejectionReason(),
                 entity.idempotencyKey());
     }
 }

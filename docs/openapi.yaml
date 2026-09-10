@@ -41,20 +41,28 @@ components:
   schemas:
     CreateTransactionRequest:
       type: object
-      required: [type, amount, currency]
+      required: [accountId, type, amount, currency]
       properties:
+        accountId: {type: string, example: acct-123}
+        description: {type: string, example: Purchase order 1042}
         type: {$ref: '#/components/schemas/TransactionType'}
         amount: {type: number, minimum: 1.01, example: 25.50}
         currency: {type: string, pattern: '^[A-Z]{3}$', example: MXN}
     Transaction:
       type: object
-      required: [id, type, amount, currency, status, createdAt]
+      required: [id, accountId, type, amount, currency, status, createdAt]
       properties:
         id: {type: string, format: uuid}
+        accountId: {type: string, example: acct-123}
+        description: {type: string, example: Purchase order 1042}
         type: {$ref: '#/components/schemas/TransactionType'}
         amount: {type: number}
         currency: {type: string, example: MXN}
         status: {$ref: '#/components/schemas/TransactionStatus'}
+        providerTransactionId: {type: string, nullable: true}
+        balanceAfter: {type: number, nullable: true, example: 974.50}
+        rejectionCode: {type: string, nullable: true}
+        rejectionReason: {type: string, nullable: true}
         createdAt: {type: string, format: date-time}
     TransactionPage:
       type: object

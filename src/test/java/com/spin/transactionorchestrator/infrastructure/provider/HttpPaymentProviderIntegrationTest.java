@@ -5,6 +5,7 @@ import static com.github.tomakehurst.wiremock.client.WireMock.equalToJson;
 import static com.github.tomakehurst.wiremock.client.WireMock.post;
 import static com.github.tomakehurst.wiremock.client.WireMock.postRequestedFor;
 import static com.github.tomakehurst.wiremock.client.WireMock.urlEqualTo;
+import static com.github.tomakehurst.wiremock.core.WireMockConfiguration.wireMockConfig;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
@@ -32,7 +33,7 @@ class HttpPaymentProviderIntegrationTest {
 
     @BeforeEach
     void startProvider() {
-        provider = new WireMockServer();
+        provider = new WireMockServer(wireMockConfig().dynamicPort());
         provider.start();
         transaction = Transaction.pending(TransactionType.DEBIT, new BigDecimal("25.50"), Currency.getInstance("MXN"), Instant.EPOCH, null);
         SimpleClientHttpRequestFactory requestFactory = new SimpleClientHttpRequestFactory();
@@ -46,31 +47,31 @@ class HttpPaymentProviderIntegrationTest {
 
     @Test
     void translatesApprovedResponse() {
-        provider.stubFor(post("/payments").willReturn(aResponse().withHeader("Content-Type", "application/json")
-                .withBody("{\"status\":\"APPROVED\",\"reference\":\"provider-123\"}")));
+        provider.stubFor(post("/provider/v1/execute").willReturn(aResponse().withHeader("Content-Type", "application/json")
+                .withBody("{\"status\":\"APPROVED\",\"transactionId\":\"provider-123\",\"balance\":974.50}")));
 
         PaymentProviderResult result = adapter.execute(transaction());
 
-        assertThat(result).isEqualTo(PaymentProviderResult.approved("provider-123"));
-        provider.verify(postRequestedFor(urlEqualTo("/payments")).withRequestBody(equalToJson(requestBody())));
+        assertThat(result).isEqualTo(PaymentProviderResult.approved("provider-123", new BigDecimal("974.50")));
+        provider.verify(postRequestedFor(urlEqualTo("/provider/v1/execute")).withRequestBody(equalToJson(requestBody())));
     }
 
     @Test
     void translatesRejectedResponse() {
-        provider.stubFor(post("/payments").willReturn(aResponse().withHeader("Content-Type", "application/json")
-                .withBody("{\"status\":\"REJECTED\",\"rejectionReason\":\"insufficient funds\"}")));
+        provider.stubFor(post("/provider/v1/execute").willReturn(aResponse().withHeader("Content-Type", "application/json")
+                .withBody("{\"status\":\"REJECTED\",\"transactionId\":\"provider-124\",\"rejectionCode\":\"INSUFFICIENT_FUNDS\",\"rejectionReason\":\"insufficient funds\"}")));
 
-        assertThat(adapter.execute(transaction())).isEqualTo(PaymentProviderResult.rejected("insufficient funds"));
+        assertThat(adapter.execute(transaction())).isEqualTo(PaymentProviderResult.rejected("provider-124", "INSUFFICIENT_FUNDS", "insufficient funds"));
     }
 
     @Test
     void translates4xxAnd5xxToProviderUnavailableException() {
-        provider.stubFor(post("/payments").willReturn(aResponse().withStatus(400)));
+        provider.stubFor(post("/provider/v1/execute").willReturn(aResponse().withStatus(400)));
         assertThatThrownBy(() -> adapter.execute(transaction())).isInstanceOf(PaymentProviderUnavailableException.class)
                 .hasMessageContaining("HTTP 400");
 
         provider.resetAll();
-        provider.stubFor(post("/payments").willReturn(aResponse().withStatus(503)));
+        provider.stubFor(post("/provider/v1/execute").willReturn(aResponse().withStatus(503)));
         assertThatThrownBy(() -> adapter.execute(transaction())).isInstanceOf(PaymentProviderUnavailableException.class)
                 .hasMessageContaining("HTTP 503");
     }
@@ -79,8 +80,8 @@ class HttpPaymentProviderIntegrationTest {
     void translatesTimeoutToProviderUnavailableException() {
         adapter = createAdapter(Duration.ofMillis(200));
 
-        provider.stubFor(post("/payments").willReturn(aResponse().withFixedDelay(500).withStatus(200)
-                .withHeader("Content-Type", "application/json").withBody("{\"status\":\"APPROVED\",\"reference\":\"late\"}")));
+        provider.stubFor(post("/provider/v1/execute").willReturn(aResponse().withFixedDelay(500).withStatus(200)
+                .withHeader("Content-Type", "application/json").withBody("{\"status\":\"APPROVED\",\"transactionId\":\"late\",\"balance\":1.00}")));
 
         assertThatThrownBy(() -> adapter.execute(transaction())).isInstanceOf(PaymentProviderUnavailableException.class)
                 .hasMessageContaining("unavailable or timed out");
@@ -91,7 +92,7 @@ class HttpPaymentProviderIntegrationTest {
     }
 
     private String requestBody() {
-        return "{\"transactionId\":\"" + transaction().id() + "\",\"type\":\"DEBIT\",\"amount\":\"25.50\",\"currency\":\"MXN\"}";
+        return "{\"accountId\":\"legacy-account\",\"type\":\"DEBIT\",\"amount\":25.50,\"currency\":\"MXN\"}";
     }
 
     private HttpPaymentProvider createAdapter(Duration timeout) {

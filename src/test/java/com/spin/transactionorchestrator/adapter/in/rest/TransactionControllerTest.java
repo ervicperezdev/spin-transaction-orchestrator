@@ -36,7 +36,7 @@ class TransactionControllerTest {
     @MockBean private FindTransactions findTransactions;
 
     @Test void returnsDefaultBoundedPageThroughFindTransactionsUseCase() throws Exception {
-        Transaction transaction = Transaction.pending(TransactionType.DEBIT, new BigDecimal("25.50"), Currency.getInstance("MXN"), Instant.parse("2026-09-08T00:00:00Z"), null);
+        Transaction transaction = Transaction.pending("acct-123", "Purchase", TransactionType.DEBIT, new BigDecimal("25.50"), Currency.getInstance("MXN"), Instant.parse("2026-09-08T00:00:00Z"), null);
         when(findTransactions.find(new FindTransactionsQuery(0, 20, null, null)))
                 .thenReturn(new TransactionPage(java.util.List.of(transaction), 0, 20, 1, 1));
 
@@ -68,47 +68,49 @@ class TransactionControllerTest {
         verify(findTransactions, times(0)).find(org.mockito.ArgumentMatchers.any());
     }
     @Test void createsTransactionAndInvokesUseCaseOnce() throws Exception {
-        Transaction transaction = Transaction.pending(TransactionType.DEBIT, new BigDecimal("25.50"), Currency.getInstance("MXN"), Instant.parse("2026-09-08T00:00:00Z"), null);
+        Transaction transaction = Transaction.pending("acct-123", "Purchase", TransactionType.DEBIT, new BigDecimal("25.50"), Currency.getInstance("MXN"), Instant.parse("2026-09-08T00:00:00Z"), null);
         transaction.approve("provider-reference-not-exposed");
         when(executeTransaction.execute(argThat(command -> command.type() == TransactionType.DEBIT && command.amount().compareTo(new BigDecimal("25.50")) == 0 && command.currency().equals(Currency.getInstance("MXN"))))).thenReturn(transaction);
-        mockMvc.perform(post("/transactions").contentType(MediaType.APPLICATION_JSON).content("{\"type\":\"DEBIT\",\"amount\":25.50,\"currency\":\"MXN\"}"))
+        mockMvc.perform(post("/transactions").contentType(MediaType.APPLICATION_JSON).content(validRequest()))
                 .andExpect(status().isCreated()).andExpect(jsonPath("$.id").value(transaction.id().toString()))
                 .andExpect(jsonPath("$.type").value("DEBIT")).andExpect(jsonPath("$.amount").value(25.50))
                 .andExpect(jsonPath("$.currency").value("MXN")).andExpect(jsonPath("$.status").value("APPROVED"))
+                .andExpect(jsonPath("$.accountId").value("acct-123"))
                 .andExpect(jsonPath("$.createdAt").value("2026-09-08T00:00:00Z"))
                 .andExpect(jsonPath("$.providerReference").doesNotExist()).andExpect(jsonPath("$.rejectionReason").doesNotExist());
         verify(executeTransaction, times(1)).execute(argThat(command -> command.type() == TransactionType.DEBIT && command.amount().compareTo(new BigDecimal("25.50")) == 0 && command.currency().equals(Currency.getInstance("MXN"))));
     }
     @Test void rejectsMalformedRequestWithoutCallingUseCase() throws Exception {
-        mockMvc.perform(post("/transactions").contentType(MediaType.APPLICATION_JSON).content("{\"type\":\"DEBIT\",\"currency\":\"MXN\"}"))
+        mockMvc.perform(post("/transactions").contentType(MediaType.APPLICATION_JSON).content("{\"accountId\":\"acct-123\",\"type\":\"DEBIT\",\"currency\":\"MXN\"}"))
                 .andExpect(status().isBadRequest()).andExpect(jsonPath("$.code").value("VALIDATION_ERROR"))
                 .andExpect(jsonPath("$.message").value("Request validation failed")).andExpect(jsonPath("$.violations[0].field").value("amount"));
         verify(executeTransaction, times(0)).execute(org.mockito.ArgumentMatchers.any());
     }
     @Test void exposesStableBusinessValidationCodeWithoutExceptionDetails() throws Exception {
         when(executeTransaction.execute(org.mockito.ArgumentMatchers.any())).thenThrow(new TransactionValidationException(TransactionValidationError.DEBIT_AMOUNT_LIMIT_EXCEEDED, "internal business detail"));
-        mockMvc.perform(post("/transactions").contentType(MediaType.APPLICATION_JSON).content("{\"type\":\"DEBIT\",\"amount\":10000.01,\"currency\":\"MXN\"}"))
+        mockMvc.perform(post("/transactions").contentType(MediaType.APPLICATION_JSON).content("{\"accountId\":\"acct-123\",\"type\":\"DEBIT\",\"amount\":10000.01,\"currency\":\"MXN\"}"))
                 .andExpect(status().isUnprocessableEntity()).andExpect(jsonPath("$.code").value("DEBIT_AMOUNT_LIMIT_EXCEEDED"))
                 .andExpect(jsonPath("$.message").value("Transaction validation failed"))
                 .andExpect(jsonPath("$.message").value(org.hamcrest.Matchers.not(org.hamcrest.Matchers.containsString("internal business detail"))));
     }
     @Test void mapsBusinessRuleFailureToSafeConflictResponse() throws Exception {
         when(executeTransaction.execute(org.mockito.ArgumentMatchers.any())).thenThrow(new TransactionStateException("transaction-id=secret"));
-        mockMvc.perform(post("/transactions").contentType(MediaType.APPLICATION_JSON).content("{\"type\":\"DEBIT\",\"amount\":25.50,\"currency\":\"MXN\"}"))
+        mockMvc.perform(post("/transactions").contentType(MediaType.APPLICATION_JSON).content(validRequest()))
                 .andExpect(status().isConflict()).andExpect(jsonPath("$.code").value("BUSINESS_RULE_VIOLATION"))
                 .andExpect(jsonPath("$.message").value("The transaction cannot be processed in its current state"));
     }
     @Test void mapsMissingResourceToSafeNotFoundResponse() throws Exception {
         when(executeTransaction.execute(org.mockito.ArgumentMatchers.any())).thenThrow(new NoSuchElementException("transaction-id=secret"));
-        mockMvc.perform(post("/transactions").contentType(MediaType.APPLICATION_JSON).content("{\"type\":\"DEBIT\",\"amount\":25.50,\"currency\":\"MXN\"}"))
+        mockMvc.perform(post("/transactions").contentType(MediaType.APPLICATION_JSON).content(validRequest()))
                 .andExpect(status().isNotFound()).andExpect(jsonPath("$.code").value("RESOURCE_NOT_FOUND"))
                 .andExpect(jsonPath("$.message").value("The requested resource was not found"));
     }
     @Test void hidesUnexpectedFailureDetails() throws Exception {
         when(executeTransaction.execute(org.mockito.ArgumentMatchers.any())).thenThrow(new IllegalStateException("provider payload=secret"));
-        mockMvc.perform(post("/transactions").contentType(MediaType.APPLICATION_JSON).content("{\"type\":\"DEBIT\",\"amount\":25.50,\"currency\":\"MXN\"}"))
+        mockMvc.perform(post("/transactions").contentType(MediaType.APPLICATION_JSON).content(validRequest()))
                 .andExpect(status().isInternalServerError()).andExpect(jsonPath("$.code").value("INTERNAL_ERROR"))
                 .andExpect(jsonPath("$.message").value("An unexpected error occurred"))
                 .andExpect(jsonPath("$.message").value(org.hamcrest.Matchers.not(org.hamcrest.Matchers.containsString("secret"))));
     }
+    private String validRequest() { return "{\"accountId\":\"acct-123\",\"description\":\"Purchase\",\"type\":\"DEBIT\",\"amount\":25.50,\"currency\":\"MXN\"}"; }
 }

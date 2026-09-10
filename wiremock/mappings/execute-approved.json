@@ -1,0 +1,4 @@
+{
+  "request": { "method": "POST", "urlPath": "/provider/v1/execute" },
+  "response": { "status": 200, "headers": { "Content-Type": "application/json" }, "jsonBody": { "status": "APPROVED", "transactionId": "mock-transaction", "balance": 974.50, "executedAt": "2026-01-01T00:00:00Z" } }
+}

@@ -9,6 +9,9 @@ import java.math.BigDecimal;
 
 @Schema(name = "CreateTransactionRequest")
 public record CreateTransactionRequest(
+        @Schema(description = "Opaque account identifier", example = "acct-123")
+        @NotBlank(message = "accountId is required") String accountId,
+        @Schema(description = "Optional transaction description", example = "Purchase order 1042") String description,
         @Schema(description = "Transaction direction", example = "DEBIT", allowableValues = {"DEBIT", "CREDIT"})
         @NotBlank(message = "type is required")
         @Pattern(regexp = "DEBIT|CREDIT", message = "type must be DEBIT or CREDIT") String type,
