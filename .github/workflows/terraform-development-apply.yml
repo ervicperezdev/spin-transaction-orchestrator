@@ -68,8 +68,39 @@ jobs:
           terraform plan -input=false -no-color -refresh-only -detailed-exitcode -out=drift.tfplan -var-file=ci.auto.tfvars >/dev/null
           result=$?
           set -e
+
+          case "$result" in
+            0)
+              echo "No se detectó drift en el estado remoto."
+              ;;
+            2)
+              # Publish only action counts; never render resource values or the plan.
+              terraform show -json drift.tfplan | jq -r '
+                (.resource_drift // .resource_changes // [])
+                | group_by(.change.actions | join(","))
+                | map("- \(length) \(.[0].change.actions | join(\", \"))")
+                | .[]
+              ' > "$RUNNER_TEMP/terraform-drift-summary.md"
+              {
+                echo "## Terraform drift detectado"
+                if test -s "$RUNNER_TEMP/terraform-drift-summary.md"; then
+                  cat "$RUNNER_TEMP/terraform-drift-summary.md"
+                else
+                  echo "- El refresh modificó el estado sin cambios de recurso resumibles."
+                fi
+              } >> "$GITHUB_STEP_SUMMARY"
+              echo "::error::Se detectó drift remoto (exit code 2); el apply se bloqueó. Consulta el resumen no sensible del job."
+              rm -f drift.tfplan
+              exit 1
+              ;;
+            *)
+              echo "::error::El refresh de Terraform falló técnicamente (exit code $result); revisa el error de Terraform anterior."
+              rm -f drift.tfplan
+              exit "$result"
+              ;;
+          esac
+
           rm -f drift.tfplan
-          test "$result" -eq 0 || { echo "::error::Se detectó drift o Terraform falló; no se aplicará ningún cambio."; exit 1; }
       - name: Generate reviewed deployment plan
         working-directory: terraform/environments/dev
         run: terraform plan -input=false -no-color -out=tfplan -var-file=ci.auto.tfvars >/dev/null
