@@ -160,11 +160,13 @@ resource "aws_iam_role_policy" "terraform_plan_state" {
   policy = data.aws_iam_policy_document.terraform_plan_state.json
 }
 
-# ViewOnlyAccess supplies Describe/List/Get calls used by Terraform refreshes;
-# mutations remain unavailable because this is not a write policy.
-resource "aws_iam_role_policy_attachment" "terraform_plan_view_only" {
+# Terraform refresh invokes read APIs that ViewOnlyAccess intentionally omits,
+# including resource tags, IAM roles and several EKS/ECR/EC2 descriptions.
+# ReadOnlyAccess grants no write actions; state writes remain restricted to the
+# exact lock object in terraform_plan_state above.
+resource "aws_iam_role_policy_attachment" "terraform_plan_read_only" {
   role       = aws_iam_role.github_terraform_plan.name
-  policy_arn = "arn:aws:iam::aws:policy/job-function/ViewOnlyAccess"
+  policy_arn = "arn:aws:iam::aws:policy/ReadOnlyAccess"
 }
 
 data "aws_iam_policy_document" "github_terraform_apply_trust" {
@@ -222,6 +224,14 @@ resource "aws_iam_role_policy" "terraform_apply_state" {
   name   = "read-write-state-and-lock"
   role   = aws_iam_role.github_terraform_apply.id
   policy = data.aws_iam_policy_document.terraform_apply_state.json
+}
+
+# Apply must perform the same complete refresh before creating or changing
+# resources. Its additional capabilities are still supplied separately below
+# as reviewed provisioning policies, not by this read-only baseline.
+resource "aws_iam_role_policy_attachment" "terraform_apply_read_only" {
+  role       = aws_iam_role.github_terraform_apply.name
+  policy_arn = "arn:aws:iam::aws:policy/ReadOnlyAccess"
 }
 
 # Infrastructure write permissions are supplied as approved, account-managed

@@ -125,3 +125,14 @@ tag protegido v* o despacho con tag -> aprobación environment production -> Pro
 Las tareas periódicas o de mantenimiento deben declararse en workflows
 separados y con permisos mínimos; no se añaden a los triggers de PR o de
 delivery para no crear ejecuciones duplicadas.
+
+### Permisos de Terraform
+
+Los roles OIDC de `plan` y `apply` reciben `ReadOnlyAccess` para que Terraform
+pueda refrescar de forma consistente los recursos existentes antes de calcular
+un cambio (incluye tags, `Describe`, `Get` y `List` que `ViewOnlyAccess` no
+cubre). El rol de `plan` sigue sin permisos de provisión y sólo puede crear o
+eliminar el objeto de lock S3 del state exacto. El rol de `apply` obtiene sus
+permisos de mutación únicamente de los ARN declarados en
+`terraform_apply_managed_policy_arns`; esa política debe ser una política
+revisada de provisionamiento del entorno, nunca `AdministratorAccess`.
