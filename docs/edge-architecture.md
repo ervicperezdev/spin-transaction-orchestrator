@@ -30,8 +30,10 @@ ser administrada por AWS Load Balancer Controller.
 
 El entorno Terraform implementa esta ruta de tráfico:
 ```text
-Internet → Route 53 → ALB + WAF → AWS Load Balancer Controller → Service → Pods
-                         └─ ACM certificate terminates HTTPS
+Internet → Route 53 alias → ALB (dos subredes públicas) → Service → Pods
+                              └─ ACM termina HTTPS; WAF es opcional por ambiente
+Ingress (alb) → AWS Load Balancer Controller crea/reconcilia el ALB
+              → ExternalDNS observa el status del Ingress y publica el alias
 ```
 
 `modules/edge` busca la zona alojada pública aprobada de Route 53, crea y
@@ -68,6 +70,43 @@ causa de infraestructura de un fallo de aplicación. En un ambiente privado este
 script debe correr desde un runner privado o un Job Kubernetes con ServiceAccount
 de privilegio mínimo; un runner hospedado por GitHub no debe obtener acceso a esa
 red para ejecutar el smoke.
+
+## Descubrimiento de subredes y publicación de `spin.ervic.pro`
+
+El AWS Load Balancer Controller sólo considera las subredes que llevan el tag
+del **nombre real de EKS**, no el nombre de la VPC o del entorno. El módulo VPC
+recibe `cluster_name` desde `local.cluster_name` y aplica en las dos AZ:
+
+| Subred | Tags obligatorios |
+| --- | --- |
+| Pública | `kubernetes.io/role/elb=1`, `kubernetes.io/cluster/<cluster-name>=shared` |
+| Privada | `kubernetes.io/role/internal-elb=1`, `kubernetes.io/cluster/<cluster-name>=shared` |
+
+El Ingress público conserva `alb.ingress.kubernetes.io/scheme: internet-facing`;
+no se desactiva la comprobación de tags del controlador ni se fijan subredes por
+anotación. Para este despliegue, el tfvars protegido debe declarar
+`route53_zone_name = "ervic.pro"` y `application_hostname = "spin.ervic.pro"`;
+`APP_HOSTNAME` debe tomar exactamente el output de Terraform.
+
+Antes de aplicar, ejecute `terraform fmt -check -recursive ../..`, `terraform
+validate` y revise que el plan sólo cambie los tags de las cuatro subredes. El
+apply corresponde al pipeline Terraform protegido; no se aplica desde una
+estación local. Tras el apply y el despliegue Helm, un operador con acceso al
+clúster valida:
+
+```bash
+kubectl -n transaction-api get ingress transaction-api -o jsonpath='{.status.loadBalancer.ingress[0].hostname}{"\n"}'
+kubectl -n transaction-api describe ingress transaction-api
+aws route53 list-hosted-zones-by-name --dns-name ervic.pro
+aws acm describe-certificate --certificate-arn "$(terraform output -raw acm_certificate_arn)" --query 'Certificate.Status' --output text
+curl --fail --resolve spin.ervic.pro:443:<alb-hostname> https://spin.ervic.pro/actuator/health
+curl --fail https://spin.ervic.pro/actuator/health
+```
+
+El primer `curl` aísla la ruta TLS/ALB antes de la propagación DNS. Después,
+compruebe que Route 53 resuelva el alias del ALB, que ACM esté en `ISSUED` y que
+el segundo `curl` responda HTTPS. El script de smoke del pipeline cubre el mismo
+orden de comprobación.
 ## Grupos de seguridad
 Terraform posee todos los grupos de seguridad relacionados con las cargas de trabajo. El grupo público ALB permite
 sólo TCP/80 (redireccionamiento) y TCP/443 desde Internet, y puede salir sólo a
