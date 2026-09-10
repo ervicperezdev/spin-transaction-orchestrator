@@ -175,6 +175,7 @@ resource "aws_iam_role_policy_attachment" "node_ecr" {
 resource "aws_eks_cluster" "this" {
   # checkov:skip=CKV_AWS_39: EXC-001 authorizes a temporary, CIDR-restricted public endpoint for GitHub-hosted development runners; private endpoint stays enabled.
   # checkov:skip=CKV_AWS_37: Dev intentionally retains only api and audit under TRA-46; the module default preserves all EKS control-plane logs for other environments.
+  # nosemgrep: terraform.lang.security.eks-insufficient-control-plane-logging.eks-insufficient-control-plane-logging
   name     = var.cluster_name
   role_arn = aws_iam_role.cluster.arn
   version  = "1.31"
