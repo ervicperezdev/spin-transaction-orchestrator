@@ -86,3 +86,18 @@ Evite listas de IP permitidas obsoletas y mantenga la propiedad fuera del AWS Lo
 El API de Kubernetes es independiente del ALB de la aplicación. La integración conserva acceso público y privado; `public_access_cidrs` controla la exposición pública, no la conectividad privada. Las reglas del security group del clúster no equivalen a una lista de IP permitidas para el endpoint público. Consulte [EXC-001](security/EXC-001-eks-public-endpoint.md) para alcance, caducidad y cierre.
 
 El módulo `addons` también instala Secrets Store CSI Driver, sus CRDs y el proveedor AWS. Los secretos se montan como archivos y no se sincronizan a Kubernetes Secrets. Debe aplicarse antes del chart de la aplicación; consulte la [guía de IAM y secretos](iam-secrets-deployment-guide.md).
+
+## Descubrimiento de subredes y DNS del Ingress
+
+El AWS Load Balancer Controller selecciona dos subredes públicas para el Ingress
+`internet-facing`. Cada una conserva `kubernetes.io/role/elb=1` y debe llevar
+`kubernetes.io/cluster/<nombre-exacto-del-cluster-EKS>=shared`; el nombre de la
+VPC o del ambiente no sustituye el nombre del cluster. Terraform recibe ambos
+valores por separado para evitar que el controlador descarte las subredes como
+pertenecientes a otro cluster.
+
+Tras el `apply`, el controlador crea el ALB y escribe su hostname en el estado
+del Ingress. ExternalDNS observa entonces `external-dns.alpha.kubernetes.io/hostname`
+y publica el alias de Route 53. Por ese orden, un estado de Ingress vacío implica
+que el FQDN puede devolver `NXDOMAIN`; no se debe crear un registro DNS manual
+que apunte a un ALB inexistente.

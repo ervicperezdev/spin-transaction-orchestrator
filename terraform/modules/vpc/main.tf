@@ -1,4 +1,8 @@
 variable "name" { type = string }
+variable "cluster_name" {
+  type        = string
+  description = "Exact EKS cluster name used by AWS Load Balancer Controller subnet discovery."
+}
 variable "vpc_cidr" { type = string }
 variable "availability_zones" { type = list(string) }
 variable "private_subnet_cidrs" { type = list(string) }
@@ -118,10 +122,10 @@ resource "aws_subnet" "private" {
   cidr_block        = each.value
   availability_zone = var.availability_zones[each.key]
   tags = {
-    Name                                = "${var.name}-private-${each.key}"
-    Tier                                = "application"
-    "kubernetes.io/role/internal-elb"   = "1"
-    "kubernetes.io/cluster/${var.name}" = "shared"
+    Name                                        = "${var.name}-private-${each.key}"
+    Tier                                        = "application"
+    "kubernetes.io/role/internal-elb"           = "1"
+    "kubernetes.io/cluster/${var.cluster_name}" = "shared"
   }
 }
 
@@ -136,10 +140,10 @@ resource "aws_subnet" "public" {
   availability_zone       = var.availability_zones[each.key]
   map_public_ip_on_launch = false
   tags = {
-    Name                                = "${var.name}-public-${each.key}"
-    Tier                                = "edge"
-    "kubernetes.io/role/elb"            = "1"
-    "kubernetes.io/cluster/${var.name}" = "shared"
+    Name                                        = "${var.name}-public-${each.key}"
+    Tier                                        = "edge"
+    "kubernetes.io/role/elb"                    = "1"
+    "kubernetes.io/cluster/${var.cluster_name}" = "shared"
   }
 }
 
