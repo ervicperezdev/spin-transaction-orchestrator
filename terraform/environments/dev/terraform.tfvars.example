@@ -29,8 +29,9 @@ eks_oidc_provider_arn    = "arn:aws:iam::123456789012:oidc-provider/oidc.eks.us-
 eks_oidc_issuer_hostpath = "oidc.eks.us-east-1.amazonaws.com/id/REPLACE_ME"
 terraform_state_bucket_name = "spin-transaction-state"
 terraform_state_key         = "spin-transaction-orchestrator/dev/terraform.tfstate"
-# Attach only a reviewed, account-managed provisioning policy. Do not attach
-# AdministratorAccess. The Terraform role itself receives state write access.
+# Optional organization-specific exception policy. The module already creates
+# and attaches its versioned Terraform provisioner policy; do not attach
+# AdministratorAccess.
 # terraform_apply_managed_policy_arns = [
 #   "arn:aws:iam::123456789012:policy/spin-terraform-development-provisioner"
 # ]

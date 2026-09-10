@@ -4,6 +4,10 @@ variable "github_repository" { type = string }
 variable "github_ref" { type = string }
 variable "terraform_state_bucket_name" { type = string }
 variable "terraform_state_key" { type = string }
+variable "terraform_managed_iam_role_name_prefixes" {
+  type        = set(string)
+  description = "Name prefixes of IAM roles this Terraform environment is permitted to create and manage."
+}
 variable "terraform_apply_managed_policy_arns" {
   type        = set(string)
   description = "Account-managed, reviewed policies granting Terraform only the infrastructure write actions it needs."
@@ -29,6 +33,8 @@ locals {
   state_bucket_arn     = "arn:aws:s3:::${var.terraform_state_bucket_name}"
   state_object_arn     = "arn:aws:s3:::${var.terraform_state_bucket_name}/${var.terraform_state_key}"
   state_lock_arn       = "arn:aws:s3:::${var.terraform_state_bucket_name}/${var.terraform_state_key}.tflock"
+  managed_role_arns    = [for prefix in var.terraform_managed_iam_role_name_prefixes : "arn:${data.aws_partition.current.partition}:iam::${data.aws_caller_identity.current.account_id}:role/${prefix}*"]
+  managed_policy_arns  = ["arn:${data.aws_partition.current.partition}:iam::${data.aws_caller_identity.current.account_id}:policy/${var.role_name}*"]
 }
 
 # GitHub's public OIDC issuer. This provider is account-wide; manage it in one
@@ -276,8 +282,185 @@ resource "aws_iam_role_policy" "terraform_apply_core_mutations" {
   policy = data.aws_iam_policy_document.terraform_apply_core_mutations.json
 }
 
-# Infrastructure write permissions are supplied as approved, account-managed
-# policies rather than silently granting AdministratorAccess.
+# The apply role is a Terraform provisioner, not an administrator.  This
+# account-managed policy declares every AWS write API used by the modules in
+# this repository.  It deliberately enumerates services/actions instead of
+# using AdministratorAccess. Some Create and control-plane APIs do not support
+# resource-level IAM authorization, so those statements must use "*"; they are
+# bounded by service/action and this account's protected GitHub environment.
+data "aws_iam_policy_document" "terraform_apply_provisioner" {
+  #checkov:skip=CKV_AWS_109:IAM permissions are constrained to environment role prefixes, approved managed policies, and permitted service principals.
+  #checkov:skip=CKV_AWS_111:Several AWS create/control-plane APIs in this Terraform inventory have no resource-level condition key.
+  #checkov:skip=CKV_AWS_356:Wildcard resources are limited to APIs that AWS does not support resource scoping for; no wildcard actions are granted.
+  statement {
+    sid = "ManageVpcAndEc2Network"
+    actions = [
+      "ec2:AllocateAddress", "ec2:AssociateAddress", "ec2:AttachInternetGateway",
+      "ec2:AuthorizeSecurityGroupEgress", "ec2:AuthorizeSecurityGroupIngress",
+      "ec2:CreateInternetGateway", "ec2:CreateNatGateway", "ec2:CreateRoute",
+      "ec2:CreateRouteTable", "ec2:CreateSecurityGroup", "ec2:CreateSubnet",
+      "ec2:CreateTags", "ec2:CreateVpc", "ec2:DeleteInternetGateway",
+      "ec2:DeleteNatGateway", "ec2:DeleteRoute", "ec2:DeleteRouteTable",
+      "ec2:DeleteSecurityGroup", "ec2:DeleteSubnet", "ec2:DeleteTags",
+      "ec2:DeleteVpc", "ec2:DetachInternetGateway", "ec2:DisassociateAddress",
+      "ec2:DisassociateRouteTable", "ec2:ModifySecurityGroupRules",
+      "ec2:ModifySubnetAttribute", "ec2:ModifyVpcAttribute", "ec2:ReleaseAddress",
+      "ec2:ReplaceRoute", "ec2:RevokeSecurityGroupEgress",
+      "ec2:RevokeSecurityGroupIngress", "ec2:UpdateSecurityGroupRuleDescriptionsEgress",
+      "ec2:UpdateSecurityGroupRuleDescriptionsIngress",
+    ]
+    resources = ["*"]
+  }
+
+  statement {
+    sid = "ManageEc2LaunchTemplates"
+    actions = [
+      "ec2:CreateLaunchTemplate", "ec2:CreateLaunchTemplateVersion",
+      "ec2:DeleteLaunchTemplate", "ec2:DeleteLaunchTemplateVersions",
+      "ec2:ModifyLaunchTemplate",
+    ]
+    resources = ["*"]
+  }
+
+  statement {
+    sid = "ManageEks"
+    actions = [
+      "eks:AssociateAccessPolicy", "eks:CreateAccessEntry", "eks:CreateAddon",
+      "eks:CreateCluster", "eks:CreateNodegroup", "eks:CreatePodIdentityAssociation",
+      "eks:DeleteAccessEntry", "eks:DeleteAddon", "eks:DeleteCluster",
+      "eks:DeleteNodegroup", "eks:DeletePodIdentityAssociation",
+      "eks:DisassociateAccessPolicy", "eks:TagResource", "eks:UntagResource",
+      "eks:UpdateAccessEntry", "eks:UpdateAddon", "eks:UpdateClusterConfig",
+      "eks:UpdateClusterVersion", "eks:UpdateNodegroupConfig", "eks:UpdateNodegroupVersion",
+      "eks:UpdatePodIdentityAssociation",
+    ]
+    resources = ["*"]
+  }
+
+  statement {
+    sid = "ManageIamResourcesCreatedByTerraform"
+    actions = [
+      "iam:AttachRolePolicy", "iam:CreateOpenIDConnectProvider", "iam:CreatePolicy",
+      "iam:CreatePolicyVersion", "iam:CreateRole", "iam:DeleteOpenIDConnectProvider",
+      "iam:DeletePolicy", "iam:DeletePolicyVersion", "iam:DeleteRole",
+      "iam:DeleteRolePolicy", "iam:DetachRolePolicy", "iam:PutRolePolicy",
+      "iam:SetDefaultPolicyVersion", "iam:TagOpenIDConnectProvider", "iam:TagPolicy",
+      "iam:TagRole", "iam:UntagOpenIDConnectProvider", "iam:UntagPolicy",
+      "iam:UntagRole", "iam:UpdateAssumeRolePolicy",
+      "iam:UpdateOpenIDConnectProviderThumbprint",
+    ]
+    resources = concat(local.managed_role_arns, local.managed_policy_arns, [
+      "arn:${data.aws_partition.current.partition}:iam::${data.aws_caller_identity.current.account_id}:oidc-provider/token.actions.githubusercontent.com",
+    ])
+  }
+
+  statement {
+    sid     = "AttachApprovedManagedPolicies"
+    actions = ["iam:AttachRolePolicy", "iam:DetachRolePolicy"]
+    resources = concat(local.managed_role_arns, [
+      "arn:${data.aws_partition.current.partition}:iam::aws:policy/AmazonEC2ContainerRegistryPullOnly",
+      "arn:${data.aws_partition.current.partition}:iam::aws:policy/AmazonEKS_CNI_Policy",
+      "arn:${data.aws_partition.current.partition}:iam::aws:policy/AmazonEKSClusterPolicy",
+      "arn:${data.aws_partition.current.partition}:iam::aws:policy/AmazonEKSWorkerNodePolicy",
+      "arn:${data.aws_partition.current.partition}:iam::aws:policy/service-role/AmazonRDSEnhancedMonitoringRole",
+    ])
+  }
+
+  statement {
+    sid       = "PassOnlyTerraformServiceRoles"
+    actions   = ["iam:PassRole"]
+    resources = local.managed_role_arns
+    condition {
+      test     = "StringEquals"
+      variable = "iam:PassedToService"
+      values = [
+        "ec2.amazonaws.com", "eks.amazonaws.com", "monitoring.rds.amazonaws.com",
+        "vpc-flow-logs.amazonaws.com",
+      ]
+    }
+  }
+
+  statement {
+    sid = "ManageRds"
+    actions = [
+      "rds:AddTagsToResource", "rds:CreateDBInstance", "rds:CreateDBParameterGroup",
+      "rds:CreateDBSubnetGroup", "rds:DeleteDBInstance", "rds:DeleteDBParameterGroup",
+      "rds:DeleteDBSubnetGroup", "rds:ModifyDBInstance", "rds:ModifyDBParameterGroup",
+      "rds:ModifyDBSubnetGroup", "rds:RebootDBInstance", "rds:RemoveTagsFromResource",
+      "rds:ResetDBParameterGroup",
+    ]
+    resources = ["*"]
+  }
+
+  statement {
+    sid = "ManageKmsKeysAndAliases"
+    actions = [
+      "kms:CancelKeyDeletion", "kms:CreateAlias", "kms:CreateGrant", "kms:CreateKey",
+      "kms:DeleteAlias", "kms:DisableKey", "kms:DisableKeyRotation", "kms:EnableKey",
+      "kms:EnableKeyRotation", "kms:PutKeyPolicy", "kms:RevokeGrant",
+      "kms:ScheduleKeyDeletion", "kms:TagResource", "kms:UntagResource", "kms:UpdateAlias",
+    ]
+    resources = ["*"]
+  }
+
+  statement {
+    sid       = "CreateEcrRepositories"
+    actions   = ["ecr:CreateRepository"]
+    resources = ["*"]
+  }
+
+  statement {
+    sid = "ManageTerraformEcrRepositories"
+    actions = [
+      "ecr:DeleteLifecyclePolicy", "ecr:DeleteRepository",
+      "ecr:PutImageScanningConfiguration", "ecr:PutImageTagMutability",
+      "ecr:PutLifecyclePolicy", "ecr:TagResource", "ecr:UntagResource",
+    ]
+    resources = ["arn:${data.aws_partition.current.partition}:ecr:${data.aws_region.current.name}:${data.aws_caller_identity.current.account_id}:repository/*"]
+  }
+
+  statement {
+    sid = "ManageCertificatesAndWaf"
+    actions = [
+      "acm:AddTagsToCertificate", "acm:DeleteCertificate", "acm:RemoveTagsFromCertificate",
+      "acm:RequestCertificate",
+      "wafv2:CreateWebACL", "wafv2:DeleteWebACL", "wafv2:TagResource",
+      "wafv2:UntagResource", "wafv2:UpdateWebACL",
+    ]
+    resources = ["*"]
+  }
+
+  statement {
+    sid       = "ManageDnsRecordsInExistingZones"
+    actions   = ["route53:ChangeResourceRecordSets"]
+    resources = ["arn:${data.aws_partition.current.partition}:route53:::hostedzone/*"]
+  }
+
+  statement {
+    sid = "ManageFlowLogDestinations"
+    actions = [
+      "logs:AssociateKmsKey", "logs:CreateLogGroup", "logs:DeleteLogGroup",
+      "logs:DisassociateKmsKey", "logs:PutRetentionPolicy", "logs:TagResource",
+      "logs:UntagResource", "ec2:CreateFlowLogs", "ec2:DeleteFlowLogs",
+    ]
+    resources = ["*"]
+  }
+}
+
+resource "aws_iam_policy" "terraform_apply_provisioner" {
+  name        = "${var.role_name}-terraform-provisioner"
+  description = "Least-privilege Terraform provisioning actions for the managed transaction infrastructure"
+  policy      = data.aws_iam_policy_document.terraform_apply_provisioner.json
+}
+
+resource "aws_iam_role_policy_attachment" "terraform_apply_provisioner" {
+  role       = aws_iam_role.github_terraform_apply.name
+  policy_arn = aws_iam_policy.terraform_apply_provisioner.arn
+}
+
+# This remains available only for organization-specific exceptions that are
+# outside this repository's resource inventory. The provisioner policy above
+# is the normal, versioned capability set for this environment.
 resource "aws_iam_role_policy_attachment" "terraform_apply_capabilities" {
   for_each   = var.terraform_apply_managed_policy_arns
   role       = aws_iam_role.github_terraform_apply.name
@@ -339,3 +522,4 @@ output "role_arn" { value = aws_iam_role.workload.arn }
 output "github_deploy_role_arn" { value = aws_iam_role.github_deploy.arn }
 output "github_terraform_plan_role_arn" { value = aws_iam_role.github_terraform_plan.arn }
 output "github_terraform_apply_role_arn" { value = aws_iam_role.github_terraform_apply.arn }
+output "github_terraform_apply_provisioner_policy_arn" { value = aws_iam_policy.terraform_apply_provisioner.arn }

@@ -6,6 +6,7 @@ output "workload_role_arn" { value = module.workload_iam.role_arn }
 output "github_deploy_role_arn" { value = module.workload_iam.github_deploy_role_arn }
 output "github_terraform_plan_role_arn" { value = module.workload_iam.github_terraform_plan_role_arn }
 output "github_terraform_apply_role_arn" { value = module.workload_iam.github_terraform_apply_role_arn }
+output "github_terraform_apply_provisioner_policy_arn" { value = module.workload_iam.github_terraform_apply_provisioner_policy_arn }
 output "acm_certificate_arn" { value = module.edge.certificate_arn }
 output "waf_web_acl_arn" { value = module.edge.web_acl_arn }
 output "alb_security_group_id" { value = module.edge.alb_security_group_id }

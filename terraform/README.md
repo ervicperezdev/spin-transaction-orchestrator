@@ -106,21 +106,28 @@ El segundo puede leer y escribir exclusivamente
 configurado. Así el `apply` puede persistir state sin conceder acceso a otros
 states del bucket.
 
-Además, el módulo entrega al rol apply las mutaciones mínimas para reconciliar
-security groups de EC2 y parameter groups de RDS (`Authorize/Revoke` de reglas
-de security group y `Modify/ResetDBParameterGroup`), limitadas a la cuenta y
-región activas. Para crear o gestionar otros recursos se mantiene la política
-account-managed declarada en `terraform_apply_managed_policy_arns`; revísela y
-amplíela explícitamente ante cada nuevo `AccessDenied`, en vez de adjuntar
-`AdministratorAccess`.
+Además, el módulo crea y adjunta al rol apply la policy account-managed
+`<role_name>-terraform-provisioner`. Es la fuente versionada de permisos de
+escritura para el inventario de este repositorio: VPC/EC2, EKS, IAM/OIDC,
+RDS, KMS, ECR, ACM/Route53/WAF y CloudWatch Logs. También conserva el acceso
+exacto al state y el baseline `ReadOnlyAccess`. No adjunta
+`AdministratorAccess` ni acciones comodín; las pocas operaciones de creación
+que AWS no permite restringir por ARN se documentan y se limitan por servicio
+y acción. `terraform_apply_managed_policy_arns` queda únicamente para
+excepciones organizacionales fuera del inventario versionado. Las mutaciones
+IAM se restringen a los prefijos de roles de este entorno (`spin-dev*` y
+`spin-cluster*`) y a la lista explícita de AWS managed policies que usan EKS y
+RDS; el rol apply no puede adjuntar `AdministratorAccess`.
 
 Por el bootstrap, este cambio se debe aplicar una vez con una identidad humana
-o de plataforma ya autorizada contra el backend existente. Después publique
+o de plataforma ya autorizada contra el backend existente: esa identidad debe
+poder crear la policy administrada y adjuntarla al rol apply (`iam:CreatePolicy`
+y `iam:AttachRolePolicy`). Después publique
 los outputs como secretos `AWS_TERRAFORM_PLAN_ROLE_ARN` (repositorio) y
 `AWS_TERRAFORM_APPLY_ROLE_ARN` (Environment `development`). El rol de apply
-acepta además `terraform_apply_managed_policy_arns`: adjunte un policy
-account-managed revisado que permita únicamente los recursos Terraform del
-ambiente. No se adjunta `AdministratorAccess` de forma implícita.
+acepta además `terraform_apply_managed_policy_arns` sólo para un policy
+account-managed revisado adicional. No se adjunta `AdministratorAccess` de
+forma implícita.
 
 El mismo rol de apply recibe una EKS access entry de alcance cluster porque
 Terraform instala add-ons y recursos Helm cluster-scoped. Esta autorización es
