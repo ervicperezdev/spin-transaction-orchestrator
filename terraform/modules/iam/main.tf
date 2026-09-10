@@ -54,7 +54,9 @@ data "aws_iam_policy_document" "github_actions_trust" {
     condition {
       test     = "StringEquals"
       variable = "token.actions.githubusercontent.com:sub"
-      values   = [local.github_subject]
+      # The same application role is used by the build job on main and the
+      # deployment job protected by the development Environment.
+      values = [local.github_subject, local.github_apply_subject]
     }
   }
 }
@@ -147,7 +149,7 @@ data "aws_iam_policy_document" "terraform_plan_state" {
   }
   statement {
     effect    = "Allow"
-    actions   = ["s3:PutObject", "s3:DeleteObject"]
+    actions   = ["s3:GetObject", "s3:PutObject", "s3:DeleteObject"]
     resources = [local.state_lock_arn]
   }
 }

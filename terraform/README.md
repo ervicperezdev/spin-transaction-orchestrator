@@ -77,12 +77,22 @@ plan remoto de PR. Cree los roles y secretos Terraform indicados, con una trust
 policy que admita el subject OIDC de PR interno para el rol de plan y los
 subjects `environment:development`/`environment:production` para apply.
 
+Este repositorio tiene habilitada una plantilla OIDC personalizada. El claim
+validado en GitHub para este PR fue
+`repo:ervicperezdev@55267476/spin-transaction-orchestrator@1360862265:pull_request`;
+no use `repo:ervicperezdev/spin-transaction-orchestrator:pull_request` en una
+trust policy. Para development, los subjects efectivos usan el mismo prefijo
+con `:ref:refs/heads/main` (build), `:environment:development` (deploy/apply)
+y `:pull_request` (plan). Los roles Terraform del módulo usan este prefijo por
+defecto.
+
 ### Bootstrap de roles Terraform
 
 El módulo `modules/iam` crea dos roles OIDC de development junto con sus
 outputs: `github_terraform_plan_role_arn` y
 `github_terraform_apply_role_arn`. El primero puede leer el state exacto y
-crear/eliminar sólo su archivo `.tflock`; nunca puede sobrescribir el state.
+leer/crear/eliminar sólo su archivo `.tflock`; nunca puede sobrescribir el
+state.
 El segundo puede leer y escribir exclusivamente
 `spin-transaction-orchestrator/dev/terraform.tfstate` y su lock en el bucket
 configurado. Así el `apply` puede persistir state sin conceder acceso a otros

@@ -31,8 +31,8 @@ variable "workload_secret_arns" {
 
 variable "github_repository" {
   type        = string
-  description = "GitHub owner/repository trusted to assume the deployment role."
-  default     = "ervicperezdev/spin-transaction-orchestrator"
+  description = "GitHub OIDC repository subject prefix configured for this repository."
+  default     = "ervicperezdev@55267476/spin-transaction-orchestrator@1360862265"
 }
 
 variable "repository_name" {
