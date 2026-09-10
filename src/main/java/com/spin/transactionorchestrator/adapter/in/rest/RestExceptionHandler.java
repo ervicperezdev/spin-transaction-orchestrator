@@ -23,39 +23,48 @@ class RestExceptionHandler {
     @ExceptionHandler(MethodArgumentNotValidException.class)
     ResponseEntity<ApiErrorResponse> handleBeanValidation(MethodArgumentNotValidException exception) {
         List<ApiErrorResponse.FieldViolation> violations = exception.getBindingResult().getFieldErrors().stream().map(this::violation).toList();
+        LOGGER.atWarn().addKeyValue("errorCode", "VALIDATION_ERROR").log("request_rejected");
         return badRequest("VALIDATION_ERROR", "Request validation failed", violations);
     }
     @ExceptionHandler({HttpMessageNotReadableException.class, InvalidTransactionRequestException.class})
     ResponseEntity<ApiErrorResponse> handleMalformedRequest(RuntimeException exception) {
+        LOGGER.atWarn().addKeyValue("errorCode", "INVALID_REQUEST").log("request_rejected");
         return badRequest("INVALID_REQUEST", "Request body is invalid", List.of());
     }
     @ExceptionHandler({MethodArgumentTypeMismatchException.class, jakarta.validation.ConstraintViolationException.class})
     ResponseEntity<ApiErrorResponse> handleInvalidQueryParameter(RuntimeException exception) {
+        LOGGER.atWarn().addKeyValue("errorCode", "INVALID_QUERY_PARAMETER").log("request_rejected");
         return badRequest("INVALID_QUERY_PARAMETER", "Query parameters are invalid", List.of());
     }
     @ExceptionHandler(TransactionValidationException.class)
     ResponseEntity<ApiErrorResponse> handleTransactionValidation(TransactionValidationException exception) {
+        LOGGER.atWarn().addKeyValue("errorCode", exception.error().name()).log("request_rejected");
         return ResponseEntity.status(HttpStatus.UNPROCESSABLE_ENTITY)
                 .body(new ApiErrorResponse(exception.error().name(), "Transaction validation failed", List.of()));
     }
     @ExceptionHandler(TransactionStateException.class)
     ResponseEntity<ApiErrorResponse> handleBusinessRule(TransactionStateException exception) {
+        LOGGER.atWarn().addKeyValue("errorCode", "BUSINESS_RULE_VIOLATION").log("request_rejected");
         return ResponseEntity.status(HttpStatus.CONFLICT).body(new ApiErrorResponse("BUSINESS_RULE_VIOLATION",
                 "The transaction cannot be processed in its current state", List.of()));
     }
     @ExceptionHandler(NoSuchElementException.class)
     ResponseEntity<ApiErrorResponse> handleMissingResource(NoSuchElementException exception) {
+        LOGGER.atWarn().addKeyValue("errorCode", "RESOURCE_NOT_FOUND").log("request_rejected");
         return ResponseEntity.status(HttpStatus.NOT_FOUND).body(new ApiErrorResponse("RESOURCE_NOT_FOUND",
                 "The requested resource was not found", List.of()));
     }
     @ExceptionHandler(PaymentProviderUnavailableException.class)
     ResponseEntity<ApiErrorResponse> handleProviderUnavailable(PaymentProviderUnavailableException exception) {
+        LOGGER.atWarn().addKeyValue("errorCode", "PAYMENT_PROVIDER_UNAVAILABLE").log("request_rejected");
         return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE).body(new ApiErrorResponse("PAYMENT_PROVIDER_UNAVAILABLE", "Payment processing is temporarily unavailable", List.of()));
     }
     @ExceptionHandler(Exception.class)
     ResponseEntity<ApiErrorResponse> handleUnexpected(Exception exception) {
         // Exception messages and stack traces can contain transaction data or provider responses.
-        LOGGER.error("Unhandled REST failure; exceptionType={}", exception.getClass().getName());
+        LOGGER.atError().addKeyValue("errorCode", "INTERNAL_ERROR")
+                .addKeyValue("exceptionType", exception.getClass().getName())
+                .log("request_rejected");
         return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(new ApiErrorResponse("INTERNAL_ERROR", "An unexpected error occurred", List.of()));
     }
     private ResponseEntity<ApiErrorResponse> badRequest(String code, String message, List<ApiErrorResponse.FieldViolation> violations) {

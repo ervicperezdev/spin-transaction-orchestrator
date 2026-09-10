@@ -56,7 +56,7 @@ public final class HttpPaymentProvider implements PaymentProvider {
 
     private void record(Timer.Sample timer, String outcome) {
         metrics.record(timer, outcome);
-        LOGGER.info("payment_provider_request_completed outcome={}", outcome);
+        LOGGER.atInfo().addKeyValue("outcome", outcome).log("payment_provider_request_completed");
     }
 
     private PaymentProviderResult translate(ProviderResponse response) {
