@@ -13,6 +13,7 @@ Backend MVP para la orquestación de transacciones. Usa Java 21, Spring Boot, Ma
 - Mapeo de controles de cumplimiento, evidencia del repositorio y brechas operativas: `docs/compliance-mapping.md`
 - Limitaciones actuales, roadmap y declaración de uso de IA: `docs/limitations-roadmap-ai.md`
 - Gobierno trunk-based, ambientes y catálogo de workflows: `docs/trunk-based-and-ci-governance.md`
+- Guion de presentación para un rol de Engineering / Platform Security Lead: `docs/interview-leadership-narrative.md`
 
 ## Prerrequisitos
 
