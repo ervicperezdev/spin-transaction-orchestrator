@@ -73,7 +73,10 @@ Terraform posee todos los grupos de seguridad relacionados con las cargas de tra
 sólo TCP/80 (redireccionamiento) y TCP/443 desde Internet, y puede salir sólo a
 TCP/8080 en el grupo de nodos trabajadores. El grupo de nodos trabajadores no tiene acceso público;
 Acepta TCP/8080 solo del grupo ALB, TCP/10250 solo del cluster
-tráfico de grupo y de nodo a nodo mediante autorreferencia. El grupo de API del clúster
+tráfico de grupo y de nodo a nodo mediante autorreferencia. El Launch Template asocia
+también el security group administrado por EKS a cada nodo: esto mantiene el canal
+control plane → kubelet para `kubectl logs`, `kubectl exec` y `kubectl port-forward`
+sin exponer TCP/10250 a Internet. El grupo de API del clúster
 Acepta TCP/443 solo de nodos trabajadores. El grupo RDS solo acepta TCP/5432
 desde los nodos trabajadores y no tiene salida inicial. Estas referencias de grupo a grupo
 Evite listas de IP permitidas obsoletas y mantenga la propiedad fuera del AWS Load Balancer Controller.
