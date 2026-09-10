@@ -27,22 +27,28 @@ jobs:
       TF_STATE_BUCKET: ${{ vars.TF_STATE_BUCKET }}
       TF_STATE_REGION: ${{ vars.TF_STATE_REGION }}
       TF_VARS_CONTENT: ${{ secrets.TF_DEV_TFVARS }}
+      TF_PLAN_ROLE_ARN: ${{ secrets.AWS_TERRAFORM_PLAN_ROLE_ARN }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: hashicorp/setup-terraform@dfe3c3f87815947d99a8997f908cb6525fc44e9e # v4.0.1
         with:
           terraform_wrapper: false
-      - uses: aws-actions/configure-aws-credentials@cbe3b392738ccf3f987d68400dafcf4b0624a56c # v6.2.4
+      - name: Check protected CI configuration
+        run: |
+          missing=()
+          for name in AWS_REGION TF_STATE_BUCKET TF_STATE_REGION TF_VARS_CONTENT TF_PLAN_ROLE_ARN; do
+            test -n "${!name}" || missing+=("$name")
+          done
+          if ((${#missing[@]})); then
+            echo "::error::Missing protected Terraform configuration: ${missing[*]}. Configure the named GitHub variable/secret before rerunning."
+            exit 1
+          fi
+      - name: Configure AWS credentials with OIDC plan role
+        uses: aws-actions/configure-aws-credentials@cbe3b392738ccf3f987d68400dafcf4b0624a56c # v6.2.4
         with:
-          role-to-assume: ${{ secrets.AWS_TERRAFORM_PLAN_ROLE_ARN }}
+          role-to-assume: ${{ env.TF_PLAN_ROLE_ARN }}
           aws-region: ${{ vars.AWS_REGION }}
           audience: sts.amazonaws.com
-      - name: Check CI configuration
-        run: |
-          test -n "$AWS_REGION"
-          test -n "$TF_STATE_BUCKET"
-          test -n "$TF_STATE_REGION"
-          test -n "$TF_VARS_CONTENT"
       - name: Materialize protected variable file
         working-directory: terraform/environments/dev
         run: |

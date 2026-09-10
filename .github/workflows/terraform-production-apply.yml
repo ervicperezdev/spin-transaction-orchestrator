@@ -29,6 +29,7 @@ jobs:
       TF_VARS_CONTENT: ${{ secrets.TF_PRODUCTION_TFVARS }}
       TF_DIRECTORY: ${{ vars.TF_PRODUCTION_DIRECTORY || 'terraform/environments/production' }}
       DEPLOY_REF: ${{ inputs.ref }}
+      TF_PLAN_ROLE_ARN: ${{ secrets.AWS_TERRAFORM_PRODUCTION_PLAN_ROLE_ARN }}
     steps:
       - name: Validate requested ref
         run: |
@@ -39,9 +40,20 @@ jobs:
       - uses: hashicorp/setup-terraform@dfe3c3f87815947d99a8997f908cb6525fc44e9e # v4.0.1
         with:
           terraform_wrapper: false
-      - uses: aws-actions/configure-aws-credentials@cbe3b392738ccf3f987d68400dafcf4b0624a56c # v6.2.4
+      - name: Check protected plan configuration
+        run: |
+          missing=()
+          for name in AWS_REGION TF_STATE_BUCKET TF_STATE_REGION TF_VARS_CONTENT TF_PLAN_ROLE_ARN; do
+            test -n "${!name}" || missing+=("$name")
+          done
+          if ((${#missing[@]})); then
+            echo "::error::Missing protected Terraform configuration: ${missing[*]}. Configure the production-plan Environment before rerunning."
+            exit 1
+          fi
+      - name: Configure AWS credentials with OIDC production plan role
+        uses: aws-actions/configure-aws-credentials@cbe3b392738ccf3f987d68400dafcf4b0624a56c # v6.2.4
         with:
-          role-to-assume: ${{ secrets.AWS_TERRAFORM_PRODUCTION_PLAN_ROLE_ARN }}
+          role-to-assume: ${{ env.TF_PLAN_ROLE_ARN }}
           aws-region: ${{ vars.AWS_REGION }}
           audience: sts.amazonaws.com
       - name: Check production configuration
@@ -97,6 +109,7 @@ jobs:
       TF_DIRECTORY: ${{ vars.TF_PRODUCTION_DIRECTORY || 'terraform/environments/production' }}
       TF_STATE_BUCKET: ${{ vars.TF_PRODUCTION_STATE_BUCKET }}
       TF_STATE_REGION: ${{ vars.TF_STATE_REGION }}
+      TF_APPLY_ROLE_ARN: ${{ secrets.AWS_TERRAFORM_PRODUCTION_APPLY_ROLE_ARN }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -104,9 +117,20 @@ jobs:
       - uses: hashicorp/setup-terraform@dfe3c3f87815947d99a8997f908cb6525fc44e9e # v4.0.1
         with:
           terraform_wrapper: false
-      - uses: aws-actions/configure-aws-credentials@cbe3b392738ccf3f987d68400dafcf4b0624a56c # v6.2.4
+      - name: Check protected apply configuration
+        run: |
+          missing=()
+          for name in AWS_REGION TF_STATE_BUCKET TF_STATE_REGION TF_APPLY_ROLE_ARN; do
+            test -n "${!name}" || missing+=("$name")
+          done
+          if ((${#missing[@]})); then
+            echo "::error::Missing protected Terraform configuration: ${missing[*]}. Configure the production Environment before rerunning."
+            exit 1
+          fi
+      - name: Configure AWS credentials with OIDC production apply role
+        uses: aws-actions/configure-aws-credentials@cbe3b392738ccf3f987d68400dafcf4b0624a56c # v6.2.4
         with:
-          role-to-assume: ${{ secrets.AWS_TERRAFORM_PRODUCTION_APPLY_ROLE_ARN }}
+          role-to-assume: ${{ env.TF_APPLY_ROLE_ARN }}
           aws-region: ${{ vars.AWS_REGION }}
           audience: sts.amazonaws.com
       - name: Download approved binary plan

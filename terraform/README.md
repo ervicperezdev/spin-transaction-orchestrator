@@ -63,6 +63,20 @@ subject del Environment correspondiente. El rol de plan solo puede leer el
 bucket/key de estado y describir recursos; el de apply tiene permisos Terraform
 mínimos sobre el ambiente. Ningún rol de plan puede asumir un rol de apply.
 
+### Diagnóstico de credenciales
+
+`configure-aws-credentials` solo recibe un token OIDC cuando
+`role-to-assume` contiene un ARN válido. Si el log dice *"Could not load
+credentials from any providers"* y no muestra `role-to-assume`, falta el
+secreto del workflow: no es una expiración de AWS. El workflow ahora termina
+antes de pedir credenciales e identifica los valores ausentes. En el estado
+actual del repositorio existen `AWS_DEPLOY_ROLE_ARN` y
+`AWS_DEPLOY_EKS_ROLE_ARN`, pero **no** sustituyen los roles Terraform: su
+trust/políticas están destinadas a la entrega de aplicación y no conceden un
+plan remoto de PR. Cree los roles y secretos Terraform indicados, con una trust
+policy que admita el subject OIDC de PR interno para el rol de plan y los
+subjects `environment:development`/`environment:production` para apply.
+
 En GitHub, configure `development` y `production` con secrets/variables
 restringidos; en `production` exija reviewers, impida que el autor se
 autoapruebe y limite despliegues a `main` y tags protegidos. Proteja también
