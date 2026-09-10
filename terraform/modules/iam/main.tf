@@ -354,8 +354,8 @@ data "aws_iam_policy_document" "terraform_apply_provisioner" {
   }
 
   statement {
-    sid       = "AttachApprovedManagedPolicies"
-    actions   = ["iam:AttachRolePolicy", "iam:DetachRolePolicy"]
+    sid     = "AttachApprovedManagedPolicies"
+    actions = ["iam:AttachRolePolicy", "iam:DetachRolePolicy"]
     resources = concat(local.managed_role_arns, [
       "arn:${data.aws_partition.current.partition}:iam::aws:policy/AmazonEC2ContainerRegistryPullOnly",
       "arn:${data.aws_partition.current.partition}:iam::aws:policy/AmazonEKS_CNI_Policy",
