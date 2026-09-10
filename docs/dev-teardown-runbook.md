@@ -41,6 +41,31 @@ Para un entorno realmente efímero, un responsable puede aprobar
 Esas opciones eliminan respectivamente la recuperación final de RDS y todas
 las imágenes del repositorio; no son valores por defecto.
 
+## Ejecución local
+
+Con credenciales AWS de un operador autorizado y sin guardar secretos en el
+repositorio, genere primero el plan:
+
+```bash
+BACKEND_CONFIG=/ruta/privada/backend.hcl \
+TF_VAR_FILE=/ruta/privada/dev.tfvars \
+./scripts/destroy-dev-local.sh
+```
+
+El script requiere `terraform`, `aws`, `kubectl`, `helm` y `jq`; ejecuta el
+preflight y deja `terraform/environments/dev/destroy.dev.tfplan` para revisión.
+Después de una aprobación humana explícita, aplique exactamente ese flujo con:
+
+```bash
+BACKEND_CONFIG=/ruta/privada/backend.hcl \
+TF_VAR_FILE=/ruta/privada/dev.tfvars \
+./scripts/destroy-dev-local.sh --apply
+```
+
+Además de `--apply`, exige escribir `DESTROY-DEV`. Las opciones
+`--skip-final-snapshot` y `--delete-ecr-images` son irreversibles y sólo se
+usan cuando un responsable las haya aprobado.
+
 ## Orden esperado
 
 Una vez retirados los recursos fuera del state, el grafo normalmente se

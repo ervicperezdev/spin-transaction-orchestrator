@@ -13,6 +13,7 @@ set -euo pipefail
 final_snapshot_identifier="${RDS_FINAL_SNAPSHOT_IDENTIFIER:-${RDS_IDENTIFIER}-final}"
 blockers=0
 vpc_id="$(terraform output -raw vpc_id)"
+runtime_tmp="${RUNNER_TEMP:-${TMPDIR:-/tmp}}"
 
 block() {
   echo "::error::$*" >&2
@@ -27,8 +28,8 @@ echo "## Dev teardown preflight"
 echo "This preflight is read-only and does not uninstall Helm releases or delete AWS resources."
 
 aws eks describe-cluster --region "$AWS_REGION" --name "$EKS_CLUSTER_NAME" --query 'cluster.status' --output text >/dev/null
-aws eks update-kubeconfig --region "$AWS_REGION" --name "$EKS_CLUSTER_NAME" --kubeconfig "$RUNNER_TEMP/teardown-kubeconfig" >/dev/null
-export KUBECONFIG="$RUNNER_TEMP/teardown-kubeconfig"
+aws eks update-kubeconfig --region "$AWS_REGION" --name "$EKS_CLUSTER_NAME" --kubeconfig "$runtime_tmp/teardown-kubeconfig" >/dev/null
+export KUBECONFIG="$runtime_tmp/teardown-kubeconfig"
 
 echo "### Helm and Ingress"
 helm list --all-namespaces
