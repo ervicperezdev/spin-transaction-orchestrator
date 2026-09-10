@@ -5,6 +5,10 @@ image:
   pullPolicy: IfNotPresent
   tag: "" # overridden by --set image.tag=$GIT_SHA
 
+paymentProviderMock:
+  enabled: false
+  image: wiremock/wiremock:3.13.2
+
 nameOverride: ""
 fullnameOverride: ""
 

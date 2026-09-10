@@ -29,7 +29,7 @@ config:
   # Usar el host de terraform output -raw rds_endpoint, sin duplicar el puerto.
   # Terraform crea la base transactions, también para el ambiente dev.
   dbUrl: "jdbc:postgresql://spin-dev.cs1s0e0m6t0w.us-east-1.rds.amazonaws.com:5432/transactions"
-  paymentProviderBaseUrl: "https://sandbox.REPLACE_WITH_PROVIDER_URL"
+  paymentProviderBaseUrl: "http://transaction-api-provider-mock:8080"
   serverPort: "8080"
 
 secretsManager:
@@ -58,3 +58,6 @@ networkPolicy:
   enabled: true
   # Debe coincidir con el CIDR de la VPC desde la que el ALB alcanza los pods.
   albSourceCidrs: ["10.42.0.0/16"]
+
+paymentProviderMock:
+  enabled: true

@@ -21,10 +21,10 @@ Backend MVP para la orquestación de transacciones. Usa Java 21, Spring Boot, Ma
 
 ## Ejecución local
 
-Inicia PostgreSQL:
+Inicia PostgreSQL y el provider mock reproducible:
 
 ```bash
-docker compose up -d postgres
+docker compose up -d
 ```
 
 Ejecuta la API:
@@ -71,7 +71,16 @@ Los valores locales predeterminados no contienen secretos y son solo para desarr
 
 ## Contrato del payment provider
 
-El outbound adapter envía `POST /payments` con `transactionId`, `type`, `amount` y `currency`. Espera una respuesta `APPROVED` con `reference`, o una respuesta `REJECTED` con `rejectionReason`. Las respuestas HTTP 4xx/5xx, respuestas malformadas y errores de red se traducen a `PaymentProviderUnavailableException`; los tipos del cliente HTTP no se filtran al domain ni al application port.
+El outbound adapter envía `POST /provider/v1/execute` con `accountId`, `type`, `amount` (decimal) y `currency`. Una aprobación incluye `transactionId`, `balance` y `executedAt`; una respuesta `REJECTED` persiste el identificador, código y motivo recibidos. Errores HTTP 4xx/5xx, respuestas malformadas, timeouts y errores de red devuelven `503 PAYMENT_PROVIDER_UNAVAILABLE` y no persisten un éxito ficticio.
+
+Ejemplo de transacción aprobada con el mock local:
+
+```bash
+curl -X POST http://localhost:8080/transactions -H 'Content-Type: application/json' \
+  -d '{"accountId":"acct-123","description":"Purchase order 1042","type":"DEBIT","amount":25.50,"currency":"MXN"}'
+```
+
+La respuesta incluye `id`, `accountId`, `description`, `status`, `providerTransactionId`, `balanceAfter` y `createdAt`. El Deployment de WireMock solo se crea con `values-dev.yaml` como `ClusterIP`; no existe plantilla Ingress para el mock.
 
 Copia `.env.example` únicamente por comodidad local; `.env` se ignora y nunca debe contener credenciales de producción.
 

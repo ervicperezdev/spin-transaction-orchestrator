@@ -41,14 +41,14 @@ public class TransactionExecutionService implements ExecuteTransaction {
             }
         }
         TransactionRules.validate(command.type(), command.amount(), command.currency());
-        Transaction transaction = Transaction.pending(command.type(), command.amount(), command.currency(), clock.instant(),
+        Transaction transaction = Transaction.pending(command.accountId(), command.description(), command.type(), command.amount(), command.currency(), clock.instant(),
                 command.idempotencyKey());
         PaymentProviderResult result = paymentProvider.execute(transaction);
 
         if (result.status() == PaymentProviderStatus.APPROVED) {
-            transaction.approve(result.reference());
+            transaction.approve(result.providerTransactionId(), result.balance());
         } else if (result.status() == PaymentProviderStatus.REJECTED) {
-            transaction.reject(result.rejectionReason());
+            transaction.reject(result.providerTransactionId(), result.rejectionCode(), result.rejectionReason());
         } else {
             throw new PaymentProviderException("Provider returned an unsupported status");
         }

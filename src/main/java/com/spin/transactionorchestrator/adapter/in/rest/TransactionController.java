@@ -75,12 +75,13 @@ class TransactionController {
     }
     private ExecuteTransactionCommand toCommand(CreateTransactionRequest request, String idempotencyKey) {
         try {
-            return new ExecuteTransactionCommand(TransactionType.valueOf(request.type()), request.amount(),
+            return new ExecuteTransactionCommand(request.accountId(), request.description(), TransactionType.valueOf(request.type()), request.amount(),
                     Currency.getInstance(request.currency()), idempotencyKey);
         } catch (IllegalArgumentException exception) { throw new InvalidTransactionRequestException(); }
     }
     private TransactionResponse toResponse(Transaction transaction) {
-        return new TransactionResponse(transaction.id(), transaction.type().name(), transaction.amount(),
-                transaction.currency().getCurrencyCode(), transaction.status().name(), transaction.createdAt());
+        return new TransactionResponse(transaction.id(), transaction.accountId(), transaction.description(), transaction.type().name(), transaction.amount(),
+                transaction.currency().getCurrencyCode(), transaction.status().name(), transaction.providerTransactionId(), transaction.balanceAfter(),
+                transaction.rejectionCode(), transaction.rejectionReason(), transaction.createdAt());
     }
 }

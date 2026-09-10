@@ -6,6 +6,7 @@ import com.spin.transactionorchestrator.application.port.out.PaymentProviderUnav
 import com.spin.transactionorchestrator.domain.model.Transaction;
 import com.spin.transactionorchestrator.infrastructure.observability.PaymentProviderMetrics;
 import io.micrometer.core.instrument.Timer;
+import java.math.BigDecimal;
 import java.time.Duration;
 import java.util.Locale;
 import org.springframework.http.MediaType;
@@ -33,7 +34,7 @@ public final class HttpPaymentProvider implements PaymentProvider {
         Timer.Sample timer = metrics.start();
         try {
             ProviderResponse response = client.post()
-                    .uri("/payments")
+                    .uri("/provider/v1/execute")
                     .contentType(MediaType.APPLICATION_JSON)
                     .body(new ProviderRequest(transaction))
                     .retrieve()
@@ -64,18 +65,18 @@ public final class HttpPaymentProvider implements PaymentProvider {
             throw new PaymentProviderUnavailableException("Payment provider returned an invalid response");
         }
         return switch (response.status().toUpperCase(Locale.ROOT)) {
-            case "APPROVED" -> PaymentProviderResult.approved(response.reference());
-            case "REJECTED" -> PaymentProviderResult.rejected(response.rejectionReason());
+            case "APPROVED" -> PaymentProviderResult.approved(response.transactionId(), response.balance());
+            case "REJECTED" -> PaymentProviderResult.rejected(response.transactionId(), response.rejectionCode(), response.rejectionReason());
             default -> throw new PaymentProviderUnavailableException("Payment provider returned unsupported status: " + response.status());
         };
     }
 
-    private record ProviderRequest(String transactionId, String type, String amount, String currency) {
+    private record ProviderRequest(String accountId, String type, BigDecimal amount, String currency) {
         private ProviderRequest(Transaction transaction) {
-            this(transaction.id().toString(), transaction.type().name(), transaction.amount().toPlainString(), transaction.currency().getCurrencyCode());
+            this(transaction.accountId(), transaction.type().name(), transaction.amount(), transaction.currency().getCurrencyCode());
         }
     }
 
-    private record ProviderResponse(String status, String reference, String rejectionReason) {
+    private record ProviderResponse(String status, String transactionId, BigDecimal balance, String rejectionCode, String rejectionReason) {
     }
 }
